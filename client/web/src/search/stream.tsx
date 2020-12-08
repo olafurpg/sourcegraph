@@ -329,18 +329,12 @@ function toGQLSearchResult(match: Match): GQL.SearchResult {
 const switchAggregateSearchResults: OperatorFunction<SearchEvent, AggregateStreamingSearchResults> = pipe(
     scan((results: AggregateStreamingSearchResults, newEvent: SearchEvent) => {
         switch (newEvent.type) {
-            case 'matches':
+            case 'results':
                 return {
                     ...results,
                     // Matches are additive
-                    results: results.results.concat(newEvent.data.map(toGQLSearchResult)),
-                }
-
-            case 'progress':
-                return {
-                    ...results,
-                    // Progress updates replace
-                    progress: newEvent.data,
+                    results: results.results.concat(newEvent.data.matches.map(toGQLSearchResult)),
+                    progress: newEvent.data.progress,
                 }
 
             case 'filters':
@@ -404,8 +398,7 @@ const messageHandlers: {
             observer.error(error)
             eventSource.close()
         }),
-    matches: observeMessages,
-    progress: observeMessages,
+    results: observeMessages,
     filters: observeMessages,
     alert: observeMessages,
 }
