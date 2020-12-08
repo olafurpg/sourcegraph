@@ -210,6 +210,12 @@ type Mutation {
     """
     setUserEmailVerified(user: ID!, email: String!, verified: Boolean!): EmptyResponse!
     """
+    Resend a verification email, no op if the email is already verified.
+
+    Only the user and site admins may perform this mutation.
+    """
+    resendVerificationEmail(user: ID!, email: String!): EmptyResponse!
+    """
     Deletes a user account. Only site admins may perform this mutation.
 
     If hard == true, a hard delete is performed. By default, deletes are
@@ -562,6 +568,11 @@ type Mutation {
     deleteLSIFIndex(id: ID!): EmptyResponse
 
     """
+    Updates the indexing configuration associated with a repository.
+    """
+    updateRepositoryIndexConfiguration(repository: ID!, configuration: String!): EmptyResponse
+
+    """
     Set the permissions of a repository (i.e., which users may view it on Sourcegraph). This
     operation overwrites the previous permissions for the repository.
     """
@@ -707,11 +718,16 @@ type Mutation {
     syncChangeset(changeset: ID!): EmptyResponse!
 
     """
-    Create a new credential for the requesting user for the given code host.
+    Create a new credential for the given user for the given code host.
     If another token for that code host already exists, an error with the error code
     ErrDuplicateCredential is returned.
     """
     createCampaignsCredential(
+        """
+        The user for which to create the credential.
+        """
+        user: ID!
+
         """
         The kind of external service being configured.
         """
@@ -1356,6 +1372,12 @@ type CampaignSpec implements Node {
     campaign doesn't yet exist.
     """
     appliesToCampaign: Campaign
+
+    """
+    The newest version of this campaign spec, as identified by its namespace
+    and name. If this is the newest version, this field will be null.
+    """
+    supersedingCampaignSpec: CampaignSpec
 
     """
     The code host connections required for applying this spec. Includes the credentials of the current user.
@@ -3207,7 +3229,7 @@ type Monitor implements Node {
     """
     Triggers trigger actions. There can only be one trigger per monitor.
     """
-    trigger: MonitorTrigger
+    trigger: MonitorTrigger!
     """
     One or more actions that are triggered by the trigger.
     """
@@ -4094,6 +4116,11 @@ type Repository implements Node & GenericSearchResultInterface {
         """
         after: String
     ): LSIFIndexConnection!
+
+    """
+    Gets the indexing configuration associated with the repository.
+    """
+    indexConfiguration: IndexConfiguration
 
     """
     A list of authorized users to access this repository with the given permission.
@@ -8211,6 +8238,16 @@ type LSIFIndexConnection {
 }
 
 """
+Explicit configuration for indexing a repository.
+"""
+type IndexConfiguration {
+    """
+    The raw JSON-encoded index configuration.
+    """
+    configuration: String
+}
+
+"""
 Mutations that are only used on Sourcegraph.com.
 FOR INTERNAL USE ONLY.
 """
@@ -8789,17 +8826,22 @@ FOR INTERNAL USE ONLY: A status message
 union StatusMessage = CloningProgress | ExternalServiceSyncError | SyncError
 
 """
+An arbitrarily large integer encoded as a decimal string.
+"""
+scalar BigInt
+
+"""
 FOR INTERNAL USE ONLY: A repository statistic
 """
 type RepositoryStats {
     """
     The amount of bytes stored in .git directories
     """
-    gitDirBytes: Int!
+    gitDirBytes: BigInt!
     """
     The number of lines indexed
     """
-    indexedLinesCount: Int!
+    indexedLinesCount: BigInt!
 }
 
 """

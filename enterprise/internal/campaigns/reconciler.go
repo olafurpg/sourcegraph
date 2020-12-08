@@ -12,7 +12,6 @@ import (
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 
-	"github.com/sourcegraph/sourcegraph/cmd/repo-updater/repos"
 	"github.com/sourcegraph/sourcegraph/internal/api"
 	"github.com/sourcegraph/sourcegraph/internal/campaigns"
 	"github.com/sourcegraph/sourcegraph/internal/db"
@@ -20,6 +19,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/internal/extsvc"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc/auth"
 	"github.com/sourcegraph/sourcegraph/internal/gitserver/protocol"
+	"github.com/sourcegraph/sourcegraph/internal/repos"
 	"github.com/sourcegraph/sourcegraph/internal/types"
 	"github.com/sourcegraph/sourcegraph/internal/workerutil"
 	"github.com/sourcegraph/sourcegraph/internal/workerutil/dbworker"
@@ -868,7 +868,11 @@ func loadExternalService(ctx context.Context, reposStore RepoStore, repo *repos.
 	return externalService, nil
 }
 
-func loadCampaign(ctx context.Context, tx *Store, id int64) (*campaigns.Campaign, error) {
+type getCampaigner interface {
+	GetCampaign(ctx context.Context, opts GetCampaignOpts) (*campaigns.Campaign, error)
+}
+
+func loadCampaign(ctx context.Context, tx getCampaigner, id int64) (*campaigns.Campaign, error) {
 	if id == 0 {
 		return nil, errors.New("changeset has no owning campaign")
 	}
@@ -912,7 +916,7 @@ func loadUserCredential(ctx context.Context, userID int32, repo *repos.Repo) (*d
 	})
 }
 
-func decorateChangesetBody(ctx context.Context, tx *Store, cs *repos.Changeset) error {
+func decorateChangesetBody(ctx context.Context, tx getCampaigner, cs *repos.Changeset) error {
 	campaign, err := loadCampaign(ctx, tx, cs.OwnedByCampaignID)
 	if err != nil {
 		return errors.Wrap(err, "failed to load campaign")

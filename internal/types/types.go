@@ -106,6 +106,12 @@ type Repo struct {
 	*RepoFields
 }
 
+// RepoName represents a source code repository name and its ID.
+type RepoName struct {
+	ID   api.RepoID
+	Name api.RepoName
+}
+
 // CloneURLs returns all the clone URLs this repo is clonable from.
 func (r *Repo) CloneURLs() []string {
 	urls := make([]string, 0, len(r.Sources))
@@ -388,6 +394,12 @@ func (rs Repos) Filter(pred func(*Repo) bool) (fs Repos) {
 		}
 	}
 	return fs
+}
+
+type AffiliatedRepository struct {
+	Name       string
+	CodeHostID int64
+	Private    bool
 }
 
 // ExternalService is a connection to an external service.

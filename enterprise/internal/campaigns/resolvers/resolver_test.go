@@ -16,7 +16,6 @@ import (
 
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/backend"
 	"github.com/sourcegraph/sourcegraph/cmd/frontend/graphqlbackend"
-	"github.com/sourcegraph/sourcegraph/cmd/repo-updater/repos"
 	ee "github.com/sourcegraph/sourcegraph/enterprise/internal/campaigns"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/campaigns/resolvers/apitest"
 	ct "github.com/sourcegraph/sourcegraph/enterprise/internal/campaigns/testing"
@@ -27,6 +26,7 @@ import (
 	"github.com/sourcegraph/sourcegraph/internal/db/dbtesting"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc"
 	"github.com/sourcegraph/sourcegraph/internal/extsvc/auth"
+	"github.com/sourcegraph/sourcegraph/internal/repos"
 	"github.com/sourcegraph/sourcegraph/internal/timeutil"
 )
 
@@ -768,6 +768,7 @@ func TestCreateCampaignsCredential(t *testing.T) {
 	}
 
 	input := map[string]interface{}{
+		"user":                graphqlbackend.MarshalUserID(userID),
 		"externalServiceKind": string(extsvc.KindGitHub),
 		"externalServiceURL":  "https://github.com/",
 		"credential":          "SOSECRET",
@@ -795,8 +796,8 @@ func TestCreateCampaignsCredential(t *testing.T) {
 }
 
 const mutationCreateCredential = `
-mutation($externalServiceKind: ExternalServiceKind!, $externalServiceURL: String!, $credential: String!) {
-  createCampaignsCredential(externalServiceKind: $externalServiceKind, externalServiceURL: $externalServiceURL, credential: $credential) { id }
+mutation($user: ID!, $externalServiceKind: ExternalServiceKind!, $externalServiceURL: String!, $credential: String!) {
+  createCampaignsCredential(user: $user, externalServiceKind: $externalServiceKind, externalServiceURL: $externalServiceURL, credential: $credential) { id }
 }
 `
 
