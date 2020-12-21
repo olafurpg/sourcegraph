@@ -747,7 +747,7 @@ func TestSearchPagination_cloning_missing(t *testing.T) {
 				t.Error("wantResults != results", cmp.Diff(test.wantResults, results))
 			}
 			if !cmp.Equal(test.wantCommon, common) {
-				t.Error("wantCommon != common", cmp.Diff(test.wantCommon, common))
+				t.Error("common mismatch (-want +got):\n", cmp.Diff(test.wantCommon, common))
 			}
 			if !cmp.Equal(test.wantErr, err) {
 				t.Error("wantErr != err", cmp.Diff(test.wantErr, err))

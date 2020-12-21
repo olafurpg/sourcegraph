@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/binary"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -69,12 +70,13 @@ func TestSearchFilesInRepos(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	repoRevs := makeRepositoryRevisions("foo/one", "foo/two", "foo/empty", "foo/cloning", "foo/missing", "foo/missing-db", "foo/timedout", "foo/no-rev")
 	args := &search.TextParameters{
 		PatternInfo: &search.TextPatternInfo{
 			FileMatchLimit: defaultMaxSearchResults,
 			Pattern:        "foo",
 		},
-		RepoPromise:  (&search.Promise{}).Resolve(makeRepositoryRevisions("foo/one", "foo/two", "foo/empty", "foo/cloning", "foo/missing", "foo/missing-db", "foo/timedout", "foo/no-rev")),
+		RepoPromise:  (&search.Promise{}).Resolve(repoRevs),
 		Query:        q,
 		Zoekt:        zoekt,
 		SearcherURLs: endpoint.Static("test"),
@@ -86,7 +88,12 @@ func TestSearchFilesInRepos(t *testing.T) {
 	if len(results) != 2 {
 		t.Errorf("expected two results, got %d", len(results))
 	}
-	assertReposStatus(t, common.repos, common.status, map[string]search.RepoStatus{
+
+	repos := map[api.RepoID]*types.RepoName{}
+	for _, rr := range repoRevs {
+		repos[rr.Repo.ID] = rr.Repo
+	}
+	assertReposStatus(t, repos, common.status, map[string]search.RepoStatus{
 		"foo/cloning":    search.RepoStatusCloning,
 		"foo/missing":    search.RepoStatusMissing,
 		"foo/missing-db": search.RepoStatusMissing,
@@ -116,7 +123,14 @@ func assertReposStatus(t *testing.T, gotRepos map[api.RepoID]*types.RepoName, go
 	t.Helper()
 	gotM := map[string]search.RepoStatus{}
 	got.Iterate(func(id api.RepoID, mask search.RepoStatus) {
-		gotM[string(gotRepos[id].Name)] = mask
+		r := gotRepos[id]
+		var name string
+		if r == nil {
+			name = fmt.Sprintf("UNKNOWNREPO{ID=%d}", id)
+		} else {
+			name = string(r.Name)
+		}
+		gotM[name] = mask
 	})
 	if diff := cmp.Diff(want, gotM); diff != "" {
 		t.Errorf("RepoStatusMap mismatch (-want +got):\n%s", diff)

@@ -8,7 +8,7 @@ import (
 )
 
 // RepoStatus is a bit flag encoding the status of a search on a repository. A
-// repository can be in many states, so is any bit may be set.
+// repository can be in many states, so any bit may be set.
 type RepoStatus uint8
 
 const (

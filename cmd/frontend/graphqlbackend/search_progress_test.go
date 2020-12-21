@@ -37,8 +37,8 @@ func TestSearchProgress(t *testing.T) {
 				status: mkStatusMap(map[string]search.RepoStatus{
 					"missing-1":  search.RepoStatusMissing,
 					"missing-2":  search.RepoStatusMissing,
-					"cloning-2":  search.RepoStatusCloning,
-					"timedout-2": search.RepoStatusTimedout,
+					"cloning-1":  search.RepoStatusCloning,
+					"timedout-1": search.RepoStatusTimedout,
 				}),
 				excluded: excludedRepos{
 					forks:    5,
