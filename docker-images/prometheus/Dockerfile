@@ -8,7 +8,7 @@ RUN PROMETHEUS_DIR='/generated/prometheus' GRAFANA_DIR='' DOCS_DIR='' NO_PRUNE=t
 RUN ls '/generated/prometheus'
 
 # To upgrade Prometheus or Alertmanager, see https://docs.sourcegraph.com/dev/background-information/observability/prometheus#upgrading-prometheus-or-alertmanager
-FROM prom/prometheus:v2.23.0@sha256:3d4983246977fd7fe398fd65e90c46a68ae7178cfe70912fb689d9aca5468975 AS prom_upstream
+FROM prom/prometheus:v2.24.0@sha256:8b93af55f1e8b1bc3e95d11292a72a90ea6aa85efe680c5adb09d9545f637f8f AS prom_upstream
 FROM prom/alertmanager:v0.21.0@sha256:913293083cb14085bfc01018bb30d1dcbbc9ed197ae21ef2ca917b0d29265198 AS am_upstream
 
 # Prepare final image
