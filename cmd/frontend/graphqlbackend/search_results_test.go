@@ -2,12 +2,15 @@ package graphqlbackend
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/go-multierror"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/zoekt"
@@ -1314,5 +1317,48 @@ func TestEvaluateAnd(t *testing.T) {
 				t.Errorf("wrong results length. want=%d, have=%d\n", len(zoektFileMatches), results.MatchCount())
 			}
 		})
+	}
+}
+
+func TestConvertErrorsForStructuralSearch(t *testing.T) {
+	cases := []struct {
+		name       string
+		errors     []error
+		wantErrors []error
+	}{
+		{
+			name:       "multierr_is_unaffected",
+			errors:     []error{errors.New("some error")},
+			wantErrors: []error{errors.New("some error")},
+		},
+		{
+			name: "convert_text_errors_to_typed_errors",
+			errors: []error{
+				errors.New("some error"),
+				errors.New("Worker_oomed"),
+				errors.New("some other error"),
+				errors.New("Out of memory"),
+				errors.New("yet another error"),
+				errors.New("no indexed repositories for structural search"),
+			},
+			wantErrors: []error{
+				errors.New("some error"),
+				errStructuralSearchMem,
+				errors.New("some other error"),
+				errStructuralSearchSearcher,
+				errors.New("yet another error"),
+				errStructuralSearchNoIndexedRepos{msg: "Learn more about managing indexed repositories in our documentation: https://docs.sourcegraph.com/admin/search#indexed-search."},
+			},
+		},
+	}
+	for _, test := range cases {
+		multiErr := &multierror.Error{
+			Errors:      test.errors,
+			ErrorFormat: multierror.ListFormatFunc,
+		}
+		haveMultiErr := convertErrorsForStructuralSearch(multiErr)
+		if !reflect.DeepEqual(haveMultiErr.Errors, test.wantErrors) {
+			t.Fatalf("test %s, have errors: %q, want: %q", test.name, haveMultiErr.Errors, test.wantErrors)
+		}
 	}
 }

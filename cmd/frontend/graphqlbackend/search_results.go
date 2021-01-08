@@ -688,7 +688,7 @@ func (r *searchResolver) evaluateLeaf(ctx context.Context) (_ *SearchResultsReso
 		return r.paginatedResults(ctx)
 	}
 
-	rr, err := r.resultsWithTimeoutSuggestion(ctx)
+	rr, err := r.doResultsWithAlerts(ctx)
 	if rr != nil {
 		r.logSearchLatency(ctx, rr.ElapsedMilliseconds())
 	}
@@ -1195,12 +1195,15 @@ func (r *searchResolver) Results(ctx context.Context) (srr *SearchResultsResolve
 	return srr, err
 }
 
-// resultsWithTimeoutSuggestion calls doResults, and in case of deadline
-// exceeded returns a search alert with a did-you-mean link for the same
-// query with a longer timeout.
-func (r *searchResolver) resultsWithTimeoutSuggestion(ctx context.Context) (*SearchResultsResolver, error) {
+// doResultsWithAlerts calls doResults and converts errors to alerts. In case of
+// deadline exceeded it returns a search alert with a did-you-mean link for the
+// same query with a longer timeout.
+func (r *searchResolver) doResultsWithAlerts(ctx context.Context) (*SearchResultsResolver, error) {
 	start := time.Now()
 	rr, err := r.doResults(ctx, "")
+	if rr == nil && err == nil {
+		panic("doResultsWithAlerts: doResults returned nil resolver and nil err")
+	}
 
 	// If we encountered a context timeout, it indicates one of the many result
 	// type searchers (file, diff, symbol, etc) completely timed out and could not
@@ -1217,6 +1220,36 @@ func (r *searchResolver) resultsWithTimeoutSuggestion(ctx context.Context) (*Sea
 		suggestTime := longer(2, usedTime)
 		return alertForTimeout(usedTime, suggestTime, r).wrap(), nil
 	}
+
+	if rr == nil && err != nil {
+		return rr, err
+	}
+
+	// rr != nil
+	var alert *searchAlert
+	newAlert := alertForDiffCommitSearch(err)
+	if newAlert != nil {
+		alert = newAlert
+	}
+	newAlert = alertForStructuralSearch(err)
+	if newAlert != nil {
+		alert = newAlert
+	}
+	if len(rr.SearchResults) == 0 && r.patternType != query.SearchTypeStructural && matchHoleRegexp.MatchString(r.originalQuery) {
+		alert = alertForStructuralSearchNotSet(r.originalQuery)
+	}
+	missingRepoRevs := errMissingRepoRevs{}
+	if errors.As(err, &missingRepoRevs) {
+		alert = alertForMissingRepoRevs(missingRepoRevs.patternType, missingRepoRevs.missingRepoRevs)
+	}
+	// If we have some results or an alert, only log the error instead of returning it.
+	// Otherwise the client would not receive the partial results or see the alert.
+	if (len(rr.SearchResults) > 0 || alert != nil) && err != nil {
+		log15.Error("Errors during search", "error", err)
+		err = nil
+	}
+	rr.alert = alert
+
 	return rr, err
 }
 
@@ -1840,6 +1873,9 @@ func (r *searchResolver) isGlobalSearch() bool {
 // regardless of what `type:` is specified in the query string.
 //
 // Partial results AND an error may be returned.
+//
+// The resolver will never contain an alert. It is the responsibility of the
+// caller to convert the returned error to an alert and update the resolver.
 func (r *searchResolver) doResults(ctx context.Context, forceOnlyResultType string) (_ *SearchResultsResolver, err error) {
 	tr, ctx := trace.New(ctx, "doResults", r.rawQuery())
 	defer func() {
@@ -2054,43 +2090,70 @@ func (r *searchResolver) doResults(ctx context.Context, forceOnlyResultType stri
 		common.excluded.Archived,
 		len(common.timedout))
 
-	var alert *searchAlert
-
-	multiErr, newAlert := alertForDiffCommitSearch(multiErr)
-	if newAlert != nil {
-		alert = newAlert
-	}
-
-	multiErr, newAlert = alertForStructuralSearch(multiErr)
-	if newAlert != nil {
-		alert = newAlert // takes higher precedence
-	}
-
-	if len(results) == 0 && r.patternType != query.SearchTypeStructural && matchHoleRegexp.MatchString(r.originalQuery) {
-		alert = alertForStructuralSearchNotSet(r.originalQuery)
-	}
-
 	if len(resolved.MissingRepoRevs) > 0 {
-		alert = alertForMissingRepoRevs(r.patternType, resolved.MissingRepoRevs)
+		multiErr = multierror.Append(multiErr, errMissingRepoRevs{r.patternType, resolved.MissingRepoRevs})
 	}
 
-	// If we have some results, only log the error instead of returning it,
-	// because otherwise the client would not receive the partial results
-	if len(results) > 0 && multiErr != nil {
-		log15.Error("Errors during search", "error", multiErr)
-		multiErr = nil
-	}
+	multiErr = convertErrorsForStructuralSearch(multiErr)
 
 	r.sortResults(ctx, results)
 
+	// Note: We are in the process of refactoring doResults to return just `results,
+	// common, error`. Do not rely on doResults returning a resolver.
 	resultsResolver := SearchResultsResolver{
 		start:               start,
 		searchResultsCommon: common,
 		SearchResults:       results,
-		alert:               alert,
+		// Don't set `alert` here, instead convert err to an alert upstream (see
+		// doResultsWithAlerts).
 	}
-
 	return &resultsResolver, multiErr.ErrorOrNil()
+}
+
+type errMissingRepoRevs struct {
+	patternType     query.SearchType
+	missingRepoRevs []*search.RepositoryRevisions
+}
+
+func (errMissingRepoRevs) Error() string {
+	return "missing repository revisions"
+}
+
+var errStructuralSearchMem = fmt.Errorf("structural search needs more memory")
+var errStructuralSearchSearcher = fmt.Errorf("searcher needs more memory")
+
+type errStructuralSearchNoIndexedRepos struct {
+	msg string
+}
+
+func (errStructuralSearchNoIndexedRepos) Error() string {
+	return "no indexed repositories for structural search"
+}
+
+// convertErrorsForStructuralSearch converts certain text-based errors to
+// sentinel errors and returns a new multierr. len(multierr) is an invariant.
+func convertErrorsForStructuralSearch(multiErr *multierror.Error) (newMultiErr *multierror.Error) {
+	if multiErr == nil {
+		return newMultiErr
+	}
+	for _, err := range multiErr.Errors {
+		if strings.Contains(err.Error(), "Worker_oomed") || strings.Contains(err.Error(), "Worker_exited_abnormally") {
+			newMultiErr = multierror.Append(newMultiErr, errStructuralSearchMem)
+		} else if strings.Contains(err.Error(), "Out of memory") {
+			newMultiErr = multierror.Append(newMultiErr, errStructuralSearchSearcher)
+		} else if strings.Contains(err.Error(), "no indexed repositories for structural search") {
+			var msg string
+			if envvar.SourcegraphDotComMode() {
+				msg = "The good news is you can index any repository you like in a self-install. It takes less than 5 minutes to set up: https://docs.sourcegraph.com/#quickstart"
+			} else {
+				msg = "Learn more about managing indexed repositories in our documentation: https://docs.sourcegraph.com/admin/search#indexed-search."
+			}
+			newMultiErr = multierror.Append(newMultiErr, errStructuralSearchNoIndexedRepos{msg: msg})
+		} else {
+			newMultiErr = multierror.Append(newMultiErr, err)
+		}
+	}
+	return newMultiErr
 }
 
 // isContextError returns true if ctx.Err() is not nil or if err
