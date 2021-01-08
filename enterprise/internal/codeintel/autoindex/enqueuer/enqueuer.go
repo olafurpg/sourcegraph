@@ -4,24 +4,29 @@ import (
 	"context"
 	"time"
 
+	"github.com/opentracing/opentracing-go/log"
+
 	"github.com/inconshreveable/log15"
 	"github.com/pkg/errors"
 
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/autoindex/config"
 	"github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/autoindex/inference"
 	store "github.com/sourcegraph/sourcegraph/enterprise/internal/codeintel/stores/dbstore"
+	"github.com/sourcegraph/sourcegraph/internal/observation"
 	"github.com/sourcegraph/sourcegraph/internal/trace/ot"
 )
 
 type IndexEnqueuer struct {
 	dbStore         DBStore
 	gitserverClient GitserverClient
+	operations      *operations
 }
 
-func NewIndexEnqueuer(dbStore DBStore, gitClient GitserverClient) *IndexEnqueuer {
+func NewIndexEnqueuer(dbStore DBStore, gitClient GitserverClient, observationContext *observation.Context) *IndexEnqueuer {
 	return &IndexEnqueuer{
 		dbStore:         dbStore,
 		gitserverClient: gitClient,
+		operations:      newOperations(observationContext),
 	}
 }
 
@@ -29,18 +34,18 @@ func (s *IndexEnqueuer) QueueIndex(ctx context.Context, repositoryID int) (err e
 	// Enable tracing on the context and trace the operation
 	ctx = ot.WithShouldTrace(ctx, true)
 
-	/* ctx, traceLog, endObservation := s.operations.queueIndex.WithAndLogger(ctx, &err, observation.Args{
+	ctx, traceLog, endObservation := s.operations.queueIndex.WithAndLogger(ctx, &err, observation.Args{
 		LogFields: []log.Field{
 			log.Int("repositoryID", repositoryID),
 		},
 	})
-	defer endObservation(1, observation.Args{}) */
+	defer endObservation(1, observation.Args{})
 
 	commit, err := s.gitserverClient.Head(ctx, repositoryID)
 	if err != nil {
 		return errors.Wrap(err, "gitserver.Head")
 	}
-	//traceLog(log.String("commit", commit))
+	traceLog(log.String("commit", commit))
 
 	isQueued, err := s.dbStore.IsQueued(ctx, repositoryID, commit)
 	if err != nil {
@@ -57,6 +62,8 @@ func (s *IndexEnqueuer) QueueIndex(ctx context.Context, repositoryID int) (err e
 	if len(indexes) == 0 {
 		return nil
 	}
+	traceLog(log.Int("numIndexes", len(indexes)))
+
 	tx, err := s.dbStore.Transact(ctx)
 	if err != nil {
 		return errors.Wrap(err, "store.Transact")
@@ -95,11 +102,21 @@ func (s *IndexEnqueuer) QueueIndex(ctx context.Context, repositoryID int) (err e
 }
 
 func (s *IndexEnqueuer) ForceQueueIndex(ctx context.Context, repositoryID int) (err error) {
+	// Enable tracing on the context and trace the operation
+	ctx = ot.WithShouldTrace(ctx, true)
+
+	ctx, traceLog, endObservation := s.operations.queueIndex.WithAndLogger(ctx, &err, observation.Args{
+		LogFields: []log.Field{
+			log.Int("repositoryID", repositoryID),
+		},
+	})
+	defer endObservation(1, observation.Args{})
 
 	commit, err := s.gitserverClient.Head(ctx, repositoryID)
 	if err != nil {
 		return errors.Wrap(err, "gitserver.Head")
 	}
+	traceLog(log.String("commit", commit))
 
 	indexes, err := s.getIndexJobs(ctx, repositoryID, commit)
 	if err != nil {
@@ -108,6 +125,7 @@ func (s *IndexEnqueuer) ForceQueueIndex(ctx context.Context, repositoryID int) (
 	if len(indexes) == 0 {
 		return nil
 	}
+	traceLog(log.Int("numIndexes", len(indexes)))
 
 	tx, err := s.dbStore.Transact(ctx)
 	if err != nil {
