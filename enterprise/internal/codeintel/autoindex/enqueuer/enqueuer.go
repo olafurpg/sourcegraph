@@ -57,7 +57,57 @@ func (s *IndexEnqueuer) QueueIndex(ctx context.Context, repositoryID int) (err e
 	if len(indexes) == 0 {
 		return nil
 	}
-	//traceLog(log.Int("numIndexes", len(indexes)))
+	tx, err := s.dbStore.Transact(ctx)
+	if err != nil {
+		return errors.Wrap(err, "store.Transact")
+	}
+	defer func() {
+		err = tx.Done(err)
+	}()
+
+	for _, index := range indexes {
+		id, err := tx.InsertIndex(ctx, index)
+		if err != nil {
+			return errors.Wrap(err, "store.QueueIndex")
+		}
+
+		log15.Info(
+			"Enqueued index",
+			"id", id,
+			"repository_id", repositoryID,
+			"commit", commit,
+		)
+	}
+
+	now := time.Now().UTC()
+	update := store.UpdateableIndexableRepository{
+		RepositoryID:        repositoryID,
+		LastIndexEnqueuedAt: &now,
+	}
+
+	// TODO(efritz) - this may create records once a repository has an explicit
+	// index configuration. This shouldn't affect any indexing behavior at all.
+	if err := tx.UpdateIndexableRepository(ctx, update, now); err != nil {
+		return errors.Wrap(err, "store.UpdateIndexableRepository")
+	}
+
+	return nil
+}
+
+func (s *IndexEnqueuer) ForceQueueIndex(ctx context.Context, repositoryID int) (err error) {
+
+	commit, err := s.gitserverClient.Head(ctx, repositoryID)
+	if err != nil {
+		return errors.Wrap(err, "gitserver.Head")
+	}
+
+	indexes, err := s.getIndexJobs(ctx, repositoryID, commit)
+	if err != nil {
+		return err
+	}
+	if len(indexes) == 0 {
+		return nil
+	}
 
 	tx, err := s.dbStore.Transact(ctx)
 	if err != nil {
