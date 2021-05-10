@@ -6,10 +6,12 @@ interface FuzzyFilesProps {
 export const FuzzyFiles: React.FunctionComponent<FuzzyFilesProps> = props => {
     return (
         <>
-          <h1>POOP</h1>
-          <ul>
-              {props.files.map(f => <li key={f}>{f}</li>)}
-          </ul>
+            <h1>POOP</h1>
+            <ul>
+                {props.files.map(f => (
+                    <li key={f}>{f}</li>
+                ))}
+            </ul>
         </>
     )
 }

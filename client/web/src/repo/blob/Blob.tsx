@@ -519,19 +519,20 @@ export const Blob: React.FunctionComponent<BlobProps> = props => {
         [viewerUpdates]
     )
 
-
     return (
         <>
-            <Shortcut {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]} onMatch={async e => {
-                console.log("POOOP")
-                console.log(props.blobInfo.repoName)
-                console.log(props.blobInfo.commitID)
-                        let variables = {
-                            repository: props.blobInfo.repoName,
-                            commit: props.blobInfo.commitID
-                        }
-                        let files = await requestGraphQL(
-                            `query Files($repository: String!, $commit: String!) {
+            <Shortcut
+                {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
+                onMatch={async e => {
+                    console.log('POOOP')
+                    console.log(props.blobInfo.repoName)
+                    console.log(props.blobInfo.commitID)
+                    let variables = {
+                        repository: props.blobInfo.repoName,
+                        commit: props.blobInfo.commitID,
+                    }
+                    let files = await requestGraphQL(
+                        `query Files($repository: String!, $commit: String!) {
                                repository(name: $repository) {
                                  commit(rev: $commit) {
                                    tree(recursive:true) {
@@ -542,17 +543,20 @@ export const Blob: React.FunctionComponent<BlobProps> = props => {
                                  }
                                }
                              }`,
-                            variables
-                        )
-                        console.log(files.subscribe((e: any) => {
+                        variables
+                    )
+                    console.log(
+                        files.subscribe((e: any) => {
                             const files = e.data.repository.commit.tree.files.map((f: any) => f.path)
                             setFuzzyFiles(files)
-                        }))
-                        // files.then(f => {
-                        //     console.log(f)
-                        // })
-            }} />
-            {fuzzyFiles && <FuzzyFiles files={fuzzyFiles}/>}
+                        })
+                    )
+                    // files.then(f => {
+                    //     console.log(f)
+                    // })
+                }}
+            />
+            {fuzzyFiles && <FuzzyFiles files={fuzzyFiles} />}
             <div className={`blob ${props.className}`} ref={nextBlobElement}>
                 <code
                     className={`blob__code ${props.wrapCode ? ' blob__code--wrapped' : ''} test-blob`}
