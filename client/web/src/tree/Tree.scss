@@ -146,15 +146,52 @@
     border-bottom: 1px solid #eee;
 }
 
-.fuzzy-files-results {
-    text-align: left;
-    font-family: monospace;
+#fuzzy-modal-input {
+    border: none;
+    width: 100%;
+    height: 1em;
+    font-size: 2em;
 }
 
-.fuzzy-files-highlighted {
+.fuzzy-modal-results {
+    text-align: left;
+    font-family: monospace;
+    list-style-type: none;
+    padding: unset;
+}
+
+.fuzzy-modal-highlighted {
     text-decoration: underline;
 }
 
-.fuzzy-files-focused {
+.fuzzy-modal-focused {
     background-color: #eee;
+}
+.fuzzy-modal-cursor {
+    position: relative;
+}
+.fuzzy-modal-cursor i {
+    position: absolute;
+    width: 1px;
+    height: 80%;
+    background-color: gray;
+    left: 5px;
+    top: 10%;
+    animation-name: fuzzy-cursor-blink;
+    animation-duration: 1200ms;
+    animation-iteration-count: infinite;
+    opacity: 1;
+}
+
+.fuzzy-modal-cursor input:focus + i {
+    display: none;
+}
+
+@keyframes fuzzy-cursor-blink {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
 }

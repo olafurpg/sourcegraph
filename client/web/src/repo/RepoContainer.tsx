@@ -393,17 +393,27 @@ export const RepoContainer: React.FunctionComponent<RepoContainerProps> = props 
 
     return (
         <div className="repo-container test-repo-container w-100 d-flex flex-column">
-            <Shortcut {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]} onMatch={() => setIsFuzzyModalVisible(true)} />
+            <Shortcut
+                {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
+                onMatch={() => {
+                    setIsFuzzyModalVisible(true)
+                    const input = document.getElementById('fuzzy-modal-input') as any
+                    input?.focus()
+                    input?.select()
+                }}
+            />
             <Shortcut
                 {...KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES.keybindings[0]}
                 onMatch={() => setIsFuzzyModalVisible(false)}
             />
-            <FuzzyModal
-                isVisible={isFuzzyModalVisible}
-                onClose={() => setIsFuzzyModalVisible(false)}
-                repoName={repoName}
-                commitID={revision}
-            />
+            {resolvedRevisionOrError && !isErrorLike(resolvedRevisionOrError) && (
+                <FuzzyModal
+                    isVisible={isFuzzyModalVisible}
+                    onClose={() => setIsFuzzyModalVisible(false)}
+                    repoName={repoName}
+                    commitID={resolvedRevisionOrError.commitID}
+                />
+            )}
             {showExtensionAlert && (
                 <InstallBrowserExtensionAlert
                     isChrome={IS_CHROME}

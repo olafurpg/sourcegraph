@@ -2,6 +2,7 @@ import { Hasher } from './Hasher'
 import { BloomFilter } from './BloomFilter'
 import { HighlightedTextProps, RangePosition } from './HighlightedText'
 import { QueryProps } from './FuzzyFiles'
+import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from './FuzzySearch'
 
 function isCaseInsensitiveQuery(query: string): boolean {
     return isLowercase(query)
@@ -168,10 +169,11 @@ class Bucket {
     }
 }
 
-export class FuzzySearch {
+export class BloomFilterFuzzySearch extends FuzzySearch {
     buckets: Bucket[]
     BUCKET_SIZE = 500
     constructor(readonly files: string[]) {
+        super()
         this.buckets = []
         let buffer: string[] = []
         files.forEach(file => {
@@ -188,7 +190,8 @@ export class FuzzySearch {
         while (end > 0 && isDelimeter(query[end])) end--
         return query.substring(0, end + 1)
     }
-    public search(query: QueryProps): HighlightedTextProps[] {
+    public search(query: FuzzySearchParameters): FuzzySearchResult {
+        if (query.value.length === 0) return this.emptyResult(query)
         const result: HighlightedTextProps[] = []
         const finalQuery = this.actualQuery(query.value)
         const isExact = isSmallQuery(query.value)
@@ -200,7 +203,14 @@ export class FuzzySearch {
             const nonExactParts = allQueryHashParts(finalQuery, false)
             this.updateSearchResults(finalQuery, nonExactParts, isCaseInsensitive, result, isVisited)
         }
-        result.sort((a, b) => {
+        return this.sorted({
+            values: result,
+            isComplete: true,
+        })
+    }
+
+    private sorted(result: FuzzySearchResult): FuzzySearchResult {
+        result.values.sort((a, b) => {
             const byLength = a.text.length - b.text.length
             if (byLength !== 0) return byLength
             const byEarliestMatch = a.offsetSum() - b.offsetSum()
@@ -209,6 +219,24 @@ export class FuzzySearch {
             return a.text.localeCompare(b.text)
         })
         return result
+    }
+
+    private emptyResult(query: FuzzySearchParameters): FuzzySearchResult {
+        const result: HighlightedTextProps[] = []
+        const self = this
+        function complete(isComplete: boolean) {
+            return self.sorted({ values: result, isComplete: isComplete })
+        }
+
+        for (var i = 0; i < this.buckets.length; i++) {
+            const bucket = this.buckets[i]
+            if (result.length > query.maxResults) return complete(false)
+            for (var j = 0; j < bucket.files.length; j++) {
+                result.push(new HighlightedTextProps(bucket.files[j], []))
+                if (result.length > query.maxResults) return complete(false)
+            }
+        }
+        return complete(true)
     }
 
     private updateSearchResults(

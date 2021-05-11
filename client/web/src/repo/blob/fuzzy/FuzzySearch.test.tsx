@@ -1,7 +1,7 @@
-import { FuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './FuzzySearch'
+import { BloomFilterFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
 
 const all = ['to/the/moon.jpg', 'business/crazy.txt', 'fuzzy/business.txt', 'haha/business.txt', 'lol/business.txt']
-const fuzzy = new FuzzySearch(all)
+const fuzzy = new BloomFilterFuzzySearch(all)
 
 function checkSearch(query: string, expected: string[]) {
     test.only(`search-${query}`, () => {
@@ -52,3 +52,6 @@ checkSearch('h/bus', ['haha/business.txt'])
 
 // checkSearch("t/m", ["to/the/moon.jpg"]);
 // checkSearch("mo", ["to/the/moon.jpg"]);
+
+// TODO: start with dot '.'
+// checkSearch("github", [".github/workflows/foo.yml"]);

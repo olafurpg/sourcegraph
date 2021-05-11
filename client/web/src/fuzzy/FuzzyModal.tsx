@@ -1,8 +1,13 @@
+import { FileLocationsNoGroupSelected } from '@sourcegraph/branded/src/components/panel/views/FileLocations'
 import { gql } from '@sourcegraph/shared/src/graphql/graphql'
 import React from 'react'
 import { requestGraphQL } from '../backend/graphql'
+import { BloomFilterFuzzySearch } from '../repo/blob/fuzzy/BloomFilterFuzzySearch'
+import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from '../repo/blob/fuzzy/FuzzySearch'
+import { HighlightedText, HighlightedTextProps } from '../repo/blob/fuzzy/HighlightedText'
 import { useLocalStorage } from '../repo/blob/fuzzy/useLocalStorage'
 
+const MAX_RESULTS = 100
 interface Empty {
     key: 'empty'
 }
@@ -13,6 +18,7 @@ interface Loading {
 interface Ready<T> {
     key: 'ready'
     value: T
+    fuzzy?: FuzzySearch
 }
 
 interface Failed {
@@ -26,35 +32,38 @@ export interface FuzzyModalProps {
     isVisible: boolean
     onClose(): void
     repoName: string
-    commitID?: string
+    commitID: string
 }
 
 export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
-    console.log('FUZZYMODAL')
-    // useEffect(() => {
-    //     function onEscape(e: KeyboardEvent) {
-    //         switch (e.key) {
-    //             case 'Escape':
-    //                 props.onClose()
-    //                 break
-    //             default:
-    //         }
-    //     }
-    //     document.body.addEventListener('keydown', onEscape)
-    //     return function cleanup() {
-    //         document.body.removeEventListener('keydown', onEscape)
-    //     }
-    // }, [props])
     if (!props.isVisible) {
         return null
     }
+    const [query, setQuery] = useLocalStorage('fuzzy-modal.query', '')
     return (
         <div className="fuzzy-modal" onClick={props.onClose}>
             <div className="fuzzy-modal-content" onClick={e => e.stopPropagation()}>
                 <div className="fuzzy-modal-header">
-                    <h4 className="fuzzy-modal-title">Files</h4>
+                    <div className="fuzzy-modal-cursor">
+                        <input
+                            id="fuzzy-modal-input"
+                            value={query}
+                            onChange={e => setQuery(e.target.value)}
+                            type="text"
+                            onKeyUp={e => {
+                                switch (e.key) {
+                                    case 'Escape':
+                                        props.onClose()
+                                        break
+                                    default:
+                                        console.log(e.key)
+                                }
+                            }}
+                        />
+                        <i></i>
+                    </div>
                 </div>
-                <div className="fuzzy-modal-body">{renderFiles(props)}</div>
+                <div className="fuzzy-modal-body">{renderFiles(props, query)}</div>
                 <div className="fuzzy-modal-footer">
                     <button className="button" onClick={props.onClose}>
                         Close
@@ -65,8 +74,10 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
     )
 }
 
-function renderFiles(props: FuzzyModalProps): JSX.Element {
-    let [files, setFiles] = useLocalStorage<Loaded<string[]>>('fuzzy-modal.files', { key: 'empty' })
+function renderFiles(props: FuzzyModalProps, query: string): JSX.Element {
+    let [files, setFiles] = useLocalStorage<Loaded<string[]>>(`fuzzy-modal.${props.repoName}.${props.commitID}`, {
+        key: 'empty',
+    })
     console.log(files.key)
     if (files.key === 'ready' && files.value.length === 0) {
         files = { key: 'empty' }
@@ -93,10 +104,11 @@ function renderFiles(props: FuzzyModalProps): JSX.Element {
                     commit: props.commitID,
                 }
             )
+            setFiles({ key: 'loading' })
             request.subscribe(
                 (e: any) => {
                     console.log(e.data)
-                    const response = e.data.repository.commit.tree.files.map((f: any) => f.path)
+                    const response = e.data.repository.commit.tree.files.map((f: any) => f.path) as string[]
                     if (response) {
                         setFiles({
                             key: 'ready',
@@ -116,20 +128,30 @@ function renderFiles(props: FuzzyModalProps): JSX.Element {
                     })
                 }
             )
-            return <p>EMPTY</p>
-        case 'failed':
-            return <p>Error: {files.errorMessage}</p>
+            return <></>
         case 'loading':
             return <p>Loading...</p>
+        case 'failed':
+            return <p>Error: {files.errorMessage}</p>
         case 'ready':
-            console.log(files)
-            if (files.value.length === 0) {
-                return <p>No files found in this repo</p>
+            if (!files.fuzzy) {
+                files.fuzzy = new BloomFilterFuzzySearch(files.value)
+            }
+            console.log(files.fuzzy)
+            const matchingFiles = files.fuzzy.search({
+                value: query,
+                maxResults: MAX_RESULTS,
+            }).values
+
+            if (matchingFiles.length === 0) {
+                return <p>No files found matching query '{query}'</p>
             }
             return (
-                <ul>
-                    {files.value.map(file => (
-                        <li key={file}>{file}</li>
+                <ul className="fuzzy-modal-results">
+                    {matchingFiles.slice(0, MAX_RESULTS).map(file => (
+                        <li key={file.text}>
+                            <HighlightedText value={file} />
+                        </li>
                     ))}
                 </ul>
             )

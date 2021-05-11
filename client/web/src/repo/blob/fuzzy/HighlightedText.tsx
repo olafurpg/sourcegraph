@@ -1,5 +1,4 @@
 import React from 'react'
-import { Shortcut } from '@slimsag/react-shortcuts'
 
 export interface RangePosition {
     startOffset: number
@@ -52,12 +51,12 @@ export const HighlightedText: React.FunctionComponent<HighlightedTextPropsInstan
     for (let i = 0; i < props.positions.length; i++) {
         const pos = props.positions[i]
         if (pos.startOffset > start) {
-            pushSpan('fuzzy-files-plaintext', start, pos.startOffset)
+            pushSpan('fuzzy-modal-plaintext', start, pos.startOffset)
         }
         start = pos.endOffset
-        pushSpan('fuzzy-files-highlighted', pos.startOffset, pos.endOffset)
+        pushSpan('fuzzy-modal-highlighted', pos.startOffset, pos.endOffset)
     }
-    pushSpan('fuzzy-files-plaintext', start, props.text.length)
+    pushSpan('fuzzy-modal-plaintext', start, props.text.length)
 
     return <>{spans}</>
 }

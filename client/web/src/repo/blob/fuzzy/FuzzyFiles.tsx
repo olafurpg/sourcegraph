@@ -1,4 +1,3 @@
-import { Shortcut } from '@slimsag/react-shortcuts'
 import React from 'react'
 import { HighlightedText, HighlightedTextProps } from './HighlightedText'
 import { useLocalStorage } from './useLocalStorage'

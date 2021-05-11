@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import { FuzzyFiles } from './FuzzyFiles'
-import { fuzzyMatches, FuzzySearch } from './FuzzySearch'
+import { fuzzyMatches, BloomFilterFuzzySearch } from './BloomFilterFuzzySearch'
 // import { LinuxFiles } from "./LinuxFiles";
 import { ChromiumFiles } from './ChromiumFiles'
 import { LinuxFiles } from './LinuxFiles'
@@ -17,7 +17,7 @@ const all = ['to/the/moon.jpg', 'business/crazy.txt', 'fuzzy/business.txt', 'hah
 //   files.push(LinuxFiles[i]);
 // }
 
-const search = new FuzzySearch(ChromiumFiles)
+const search = new BloomFilterFuzzySearch(ChromiumFiles)
 // const search = new FuzzySearch(LinuxFiles);
 // console.log(search.buckets);
 // console.log(search.search("t/moon"));
