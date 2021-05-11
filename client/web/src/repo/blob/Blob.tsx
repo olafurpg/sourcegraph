@@ -219,7 +219,6 @@ export const Blob: React.FunctionComponent<BlobProps> = props => {
     const nextCloseButtonClick = useCallback((click: MouseEvent) => closeButtonClicks.next(click), [closeButtonClicks])
 
     const [decorationsOrError, setDecorationsOrError] = useState<TextDocumentDecoration[] | Error | undefined>()
-    const [fuzzyFiles, setFuzzyFiles] = useState<string[]>([])
 
     const hoverifier = useMemo(
         () =>
@@ -521,42 +520,6 @@ export const Blob: React.FunctionComponent<BlobProps> = props => {
 
     return (
         <>
-            <Shortcut
-                {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
-                onMatch={async e => {
-                    console.log('POOOP')
-                    console.log(props.blobInfo.repoName)
-                    console.log(props.blobInfo.commitID)
-                    let variables = {
-                        repository: props.blobInfo.repoName,
-                        commit: props.blobInfo.commitID,
-                    }
-                    let files = await requestGraphQL(
-                        `query Files($repository: String!, $commit: String!) {
-                               repository(name: $repository) {
-                                 commit(rev: $commit) {
-                                   tree(recursive:true) {
-                                     files(first:1000000,recursive: true) {
-                                       path
-                                     }
-                                   }
-                                 }
-                               }
-                             }`,
-                        variables
-                    )
-                    console.log(
-                        files.subscribe((e: any) => {
-                            const files = e.data.repository.commit.tree.files.map((f: any) => f.path)
-                            setFuzzyFiles(files)
-                        })
-                    )
-                    // files.then(f => {
-                    //     console.log(f)
-                    // })
-                }}
-            />
-            {fuzzyFiles && <FuzzyFiles files={fuzzyFiles} />}
             <div className={`blob ${props.className}`} ref={nextBlobElement}>
                 <code
                     className={`blob__code ${props.wrapCode ? ' blob__code--wrapped' : ''} test-blob`}
