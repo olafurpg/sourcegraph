@@ -58,5 +58,11 @@ export const HighlightedText: React.FunctionComponent<HighlightedTextPropsInstan
     }
     pushSpan('fuzzy-modal-plaintext', start, props.text.length)
 
-    return props.url ? <a href={props.url}>{spans}</a> : <>{spans}</>
+    return props.url ? (
+        <a className="fuzzy-modal-link" href={props.url}>
+            {spans}
+        </a>
+    ) : (
+        <>{spans}</>
+    )
 }

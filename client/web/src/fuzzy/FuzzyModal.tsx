@@ -54,6 +54,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                 <div className="fuzzy-modal-header">
                     <div className="fuzzy-modal-cursor">
                         <input
+                            autoComplete="off"
                             id="fuzzy-modal-input"
                             value={query.value}
                             onChange={e => {
@@ -168,7 +169,9 @@ function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: S
             return empty(<p>Error: {files.value.errorMessage}</p>)
         case 'ready':
             if (!files.value.fuzzy) {
-                files.value.fuzzy = new BloomFilterFuzzySearch(files.value.value.map(f => ({ value: f, url: `/$f` })))
+                files.value.fuzzy = new BloomFilterFuzzySearch(
+                    files.value.value.map(f => ({ value: f, url: `/${props.repoName}@${props.commitID}/-/blob/${f}` }))
+                )
             }
             const matchingFiles = files.value.fuzzy.search({
                 value: query.value,
