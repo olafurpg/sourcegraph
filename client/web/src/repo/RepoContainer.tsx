@@ -64,6 +64,12 @@ import { RepoSettingsAreaRoute } from './settings/RepoSettingsArea'
 import { RepoSettingsSideBarGroup } from './settings/RepoSettingsSidebar'
 
 import { redirectToExternalHost } from '.'
+import { Shortcut } from '@slimsag/react-shortcuts'
+import {
+    KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES,
+    KEYBOARD_SHORTCUT_FUZZY_FILES,
+} from '../keyboardShortcuts/keyboardShortcuts'
+import { FuzzyModal } from '../fuzzy/FuzzyModal'
 
 /**
  * Props passed to sub-routes of {@link RepoContainer}.
@@ -316,6 +322,7 @@ export const RepoContainer: React.FunctionComponent<RepoContainerProps> = props 
     // Browser extension discoverability features (alert, popover for `GoToCodeHostAction)
     const [hasDismissedExtensionAlert, setHasDismissedExtensionAlert] = useLocalStorage(HAS_DISMISSED_ALERT_KEY, false)
     const [hasDismissedPopover, setHasDismissedPopover] = useState(false)
+    const [isFuzzyModalVisible, setIsFuzzyModalVisible] = useState(false)
     const [hoverCount, setHoverCount] = useLocalStorage(HOVER_COUNT_KEY, 0)
     const canShowPopover =
         !hasDismissedPopover &&
@@ -386,6 +393,17 @@ export const RepoContainer: React.FunctionComponent<RepoContainerProps> = props 
 
     return (
         <div className="repo-container test-repo-container w-100 d-flex flex-column">
+            <Shortcut {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]} onMatch={() => setIsFuzzyModalVisible(true)} />
+            <Shortcut
+                {...KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES.keybindings[0]}
+                onMatch={() => setIsFuzzyModalVisible(false)}
+            />
+            <FuzzyModal
+                isVisible={isFuzzyModalVisible}
+                onClose={() => setIsFuzzyModalVisible(false)}
+                repoName={repoName}
+                commitID={revision}
+            />
             {showExtensionAlert && (
                 <InstallBrowserExtensionAlert
                     isChrome={IS_CHROME}

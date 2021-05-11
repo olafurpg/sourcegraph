@@ -29,8 +29,6 @@ import { fetchTreeEntries } from '../repo/backend'
 import { ChildTreeLayer } from './ChildTreeLayer'
 import { TreeNode } from './Tree'
 import { hasSingleChild, singleChildEntriesToGitTree, SingleChildGitTree } from './util'
-import { Shortcut } from '@slimsag/react-shortcuts'
-import { KEYBOARD_SHORTCUT_FUZZY_FILES } from '../keyboardShortcuts/keyboardShortcuts'
 
 const maxEntries = 2500
 
@@ -61,6 +59,7 @@ const LOADING = 'loading' as const
 interface TreeRootState {
     treeOrError?: typeof LOADING | TreeFields | ErrorLike
     fileDecorationsByPath: FileDecorationsByPath
+    isFuzzyModalVisible: boolean
 }
 
 export class TreeRoot extends React.Component<TreeRootProps, TreeRootState> {
@@ -80,6 +79,7 @@ export class TreeRoot extends React.Component<TreeRootProps, TreeRootState> {
         }
         this.state = {
             fileDecorationsByPath: {},
+            isFuzzyModalVisible: false,
         }
     }
 
@@ -203,40 +203,36 @@ export class TreeRoot extends React.Component<TreeRootProps, TreeRootState> {
                      * We should not be stealing focus here, we should let the user focus on the actual items listed.
                      * Issue: https://github.com/sourcegraph/sourcegraph/issues/19167
                      */
-                    <table className="tree-layer" tabIndex={0}>
-                        <Shortcut
-                            {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
-                            onMatch={() => {
-                                console.log('POOP')
-                            }}
-                        />
-                        <tbody>
-                            <tr>
-                                <td className="tree__cell">
-                                    {treeOrError === LOADING ? (
-                                        <div className="tree__row-loader">
-                                            <LoadingSpinner className="icon-inline tree-page__entries-loader" />
-                                            Loading tree
-                                        </div>
-                                    ) : (
-                                        treeOrError && (
-                                            <ChildTreeLayer
-                                                {...this.props}
-                                                parent={this.node}
-                                                depth={-1 as number}
-                                                entries={treeOrError.entries}
-                                                singleChildTreeEntry={singleChildTreeEntry}
-                                                childrenEntries={singleChildTreeEntry.children}
-                                                onHover={this.fetchChildContents}
-                                                setChildNodes={this.setChildNode}
-                                                fileDecorationsByPath={this.state.fileDecorationsByPath}
-                                            />
-                                        )
-                                    )}
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <>
+                        <table className="tree-layer" tabIndex={0}>
+                            <tbody>
+                                <tr>
+                                    <td className="tree__cell">
+                                        {treeOrError === LOADING ? (
+                                            <div className="tree__row-loader">
+                                                <LoadingSpinner className="icon-inline tree-page__entries-loader" />
+                                                Loading tree
+                                            </div>
+                                        ) : (
+                                            treeOrError && (
+                                                <ChildTreeLayer
+                                                    {...this.props}
+                                                    parent={this.node}
+                                                    depth={-1 as number}
+                                                    entries={treeOrError.entries}
+                                                    singleChildTreeEntry={singleChildTreeEntry}
+                                                    childrenEntries={singleChildTreeEntry.children}
+                                                    onHover={this.fetchChildContents}
+                                                    setChildNodes={this.setChildNode}
+                                                    fileDecorationsByPath={this.state.fileDecorationsByPath}
+                                                />
+                                            )
+                                        )}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </>
                 )}
             </>
         )

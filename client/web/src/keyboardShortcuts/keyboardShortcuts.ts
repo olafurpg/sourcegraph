@@ -33,6 +33,12 @@ export const KEYBOARD_SHORTCUT_FUZZY_FILES: KeyboardShortcut = {
     keybindings: [{ ordered: ['t'] }],
 }
 
+export const KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES: KeyboardShortcut = {
+    id: 'closeFuzzyFiles',
+    title: 'Close fuzzy search files',
+    keybindings: [{ ordered: ['Escape'] }],
+}
+
 export const KEYBOARD_SHORTCUT_COPY_FULL_QUERY: KeyboardShortcut = {
     id: 'copyFullQuery',
     title: 'Copy full query',

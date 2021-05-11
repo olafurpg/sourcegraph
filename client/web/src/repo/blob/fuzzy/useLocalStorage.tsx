@@ -1,6 +1,7 @@
 import { useState } from 'react'
+export type Dispatch<A> = (value: A) => void
 
-export function useLocalStorage<T>(key: string, initialValue: T) {
+export function useLocalStorage<T>(key: string, initialValue: T): [T, Dispatch<T>] {
     const [storedValue, setStoredValue] = useState(() => {
         try {
             const item = window.localStorage.getItem(key)

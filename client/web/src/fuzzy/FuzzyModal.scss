@@ -1,0 +1,45 @@
+.fuzzy-modal {
+    position: absolute;
+    overflow: scroll;
+    left: 0;
+    right: 0;
+    top: 0;
+    overflow-y: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fuzzy-modal-content {
+    width: 80vw;
+    background-color: #fff;
+}
+
+.fuzzy-modal-header,
+.fuzzy-modal-footer {
+    padding: 10px;
+}
+
+.fuzzy-modal-title {
+    margin: 0;
+}
+
+.fuzzy-modal-body {
+    padding: 10px;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+}
+
+.fuzzy-files-results {
+    text-align: left;
+    font-family: monospace;
+}
+
+.fuzzy-files-highlighted {
+    text-decoration: underline;
+}
+
+.fuzzy-files-focused {
+    background-color: #eee;
+}
