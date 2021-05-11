@@ -1,6 +1,6 @@
 import { FileLocationsNoGroupSelected } from '@sourcegraph/branded/src/components/panel/views/FileLocations'
 import { gql } from '@sourcegraph/shared/src/graphql/graphql'
-import React from 'react'
+import React, { useState } from 'react'
 import { requestGraphQL } from '../backend/graphql'
 import { BloomFilterFuzzySearch } from '../repo/blob/fuzzy/BloomFilterFuzzySearch'
 import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from '../repo/blob/fuzzy/FuzzySearch'
@@ -40,6 +40,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
         return null
     }
     const [query, setQuery] = useLocalStorage('fuzzy-modal.query', '')
+    const [focusIndex, setFocusIndex] = useState(0)
     return (
         <div className="fuzzy-modal" onClick={props.onClose}>
             <div className="fuzzy-modal-content" onClick={e => e.stopPropagation()}>
