@@ -7,7 +7,7 @@ export interface RangePosition {
 }
 
 export class HighlightedTextProps {
-    constructor(readonly text: string, readonly positions: RangePosition[]) {}
+    constructor(readonly text: string, readonly positions: RangePosition[], readonly url?: string) {}
     offsetSum(): number {
         let sum = 0
         this.positions.forEach(pos => {
@@ -58,5 +58,5 @@ export const HighlightedText: React.FunctionComponent<HighlightedTextPropsInstan
     }
     pushSpan('fuzzy-modal-plaintext', start, props.text.length)
 
-    return <>{spans}</>
+    return props.url ? <a href={props.url}>{spans}</a> : <>{spans}</>
 }

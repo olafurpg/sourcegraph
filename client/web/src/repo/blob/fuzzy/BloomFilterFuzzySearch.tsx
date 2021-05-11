@@ -1,7 +1,6 @@
 import { Hasher } from './Hasher'
 import { BloomFilter } from './BloomFilter'
 import { HighlightedTextProps, RangePosition } from './HighlightedText'
-import { QueryProps } from './FuzzyFiles'
 import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from './FuzzySearch'
 
 function isCaseInsensitiveQuery(query: string): boolean {
@@ -31,6 +30,7 @@ function isDelimeter(ch: string): boolean {
 
 const MAX_VALUE_LENGTH = 100
 const SMALL_QUERY_SIZE = 3
+
 function isSmallQuery(query: string): boolean {
     return query.length <= SMALL_QUERY_SIZE
 }
@@ -83,11 +83,11 @@ export function nextFuzzyPart(value: string, start: number): number {
     while (end < value.length && !isDelimeterOrUppercase(value[end])) end++
     return end
 }
-function populateBloomFilter(values: string[]): BloomFilter {
+function populateBloomFilter(values: SearchValue[]): BloomFilter {
     let hashes = new BloomFilter(2 << 17, 8)
     values.forEach(value => {
-        if (value.length < MAX_VALUE_LENGTH) {
-            updateHashParts(value, hashes)
+        if (value.value.length < MAX_VALUE_LENGTH) {
+            updateHashParts(value.value, hashes)
         }
     })
     return hashes
@@ -141,7 +141,7 @@ interface BucketResult {
 class Bucket {
     filter: BloomFilter
     id: number
-    constructor(readonly files: string[]) {
+    constructor(readonly files: SearchValue[]) {
         // console.log(`files=${files} hashes=${hashes}`);
         this.filter = populateBloomFilter(files)
         this.id = Math.random()
@@ -160,22 +160,27 @@ class Bucket {
         const queryParts = allFuzzyParts(query)
         for (var i = 0; i < this.files.length; i++) {
             const file = this.files[i]
-            const positions = fuzzyMatches(queryParts, file, isCaseInsensitive)
+            const positions = fuzzyMatches(queryParts, file.value, isCaseInsensitive)
             if (positions.length > 0) {
-                result.push(new HighlightedTextProps(file, positions))
+                result.push(new HighlightedTextProps(file.value, positions, file.url))
             }
         }
         return { skipped: false, value: result }
     }
 }
 
+export interface SearchValue {
+    value: string
+    url?: string
+}
+
 export class BloomFilterFuzzySearch extends FuzzySearch {
     buckets: Bucket[]
     BUCKET_SIZE = 500
-    constructor(readonly files: string[]) {
+    constructor(readonly files: SearchValue[]) {
         super()
         this.buckets = []
-        let buffer: string[] = []
+        let buffer: SearchValue[] = []
         files.forEach(file => {
             buffer.push(file)
             if (buffer.length >= this.BUCKET_SIZE) {
@@ -232,7 +237,8 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
             const bucket = this.buckets[i]
             if (result.length > query.maxResults) return complete(false)
             for (var j = 0; j < bucket.files.length; j++) {
-                result.push(new HighlightedTextProps(bucket.files[j], []))
+                const value = bucket.files[j]
+                result.push(new HighlightedTextProps(value.value, [], value.url))
                 if (result.length > query.maxResults) return complete(false)
             }
         }

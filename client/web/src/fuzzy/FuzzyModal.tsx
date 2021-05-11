@@ -1,11 +1,10 @@
-import { FileLocationsNoGroupSelected } from '@sourcegraph/branded/src/components/panel/views/FileLocations'
 import { gql } from '@sourcegraph/shared/src/graphql/graphql'
-import React, { useState } from 'react'
+import React from 'react'
 import { requestGraphQL } from '../backend/graphql'
 import { BloomFilterFuzzySearch } from '../repo/blob/fuzzy/BloomFilterFuzzySearch'
-import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from '../repo/blob/fuzzy/FuzzySearch'
+import { FuzzySearch } from '../repo/blob/fuzzy/FuzzySearch'
 import { HighlightedText, HighlightedTextProps } from '../repo/blob/fuzzy/HighlightedText'
-import { useLocalStorage } from '../repo/blob/fuzzy/useLocalStorage'
+import { useEphemeralState, useLocalStorage, State } from '../repo/blob/fuzzy/useLocalStorage'
 
 const MAX_RESULTS = 100
 interface Empty {
@@ -39,8 +38,16 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
     if (!props.isVisible) {
         return null
     }
-    const [query, setQuery] = useLocalStorage('fuzzy-modal.query', '')
-    const [focusIndex, setFocusIndex] = useState(0)
+    const query = useLocalStorage('fuzzy-modal.query', '')
+    const focusIndex = useEphemeralState(0)
+    const body = renderFiles(props, query, focusIndex)
+    function setRoundedFocusIndex(newNumber: number) {
+        const N = body.results.length
+        const i = newNumber % N
+        const nextIndex = i < 0 ? N + i : i
+        focusIndex.set(nextIndex)
+        document.getElementById(`fuzzy-modal-result-${nextIndex}`)?.scrollIntoView(false)
+    }
     return (
         <div className="fuzzy-modal" onClick={props.onClose}>
             <div className="fuzzy-modal-content" onClick={e => e.stopPropagation()}>
@@ -48,13 +55,30 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                     <div className="fuzzy-modal-cursor">
                         <input
                             id="fuzzy-modal-input"
-                            value={query}
-                            onChange={e => setQuery(e.target.value)}
+                            value={query.value}
+                            onChange={e => {
+                                query.set(e.target.value)
+                                focusIndex.set(0)
+                            }}
                             type="text"
-                            onKeyUp={e => {
+                            onKeyDown={e => {
                                 switch (e.key) {
                                     case 'Escape':
                                         props.onClose()
+                                        break
+                                    case 'ArrowDown':
+                                        setRoundedFocusIndex(focusIndex.value + 1)
+                                        break
+                                    case 'ArrowUp':
+                                        setRoundedFocusIndex(focusIndex.value - 1)
+                                        break
+                                    case 'Enter':
+                                        if (focusIndex.value < body.results.length) {
+                                            const url = body.results[focusIndex.value].url
+                                            if (url) {
+                                                window.location.href = url
+                                            }
+                                        }
                                         break
                                     default:
                                         console.log(e.key)
@@ -64,7 +88,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                         <i></i>
                     </div>
                 </div>
-                <div className="fuzzy-modal-body">{renderFiles(props, query)}</div>
+                <div className="fuzzy-modal-body">{body.element}</div>
                 <div className="fuzzy-modal-footer">
                     <button className="button" onClick={props.onClose}>
                         Close
@@ -75,16 +99,24 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
     )
 }
 
-function renderFiles(props: FuzzyModalProps, query: string): JSX.Element {
-    let [files, setFiles] = useLocalStorage<Loaded<string[]>>(`fuzzy-modal.${props.repoName}.${props.commitID}`, {
+interface RenderedFiles {
+    element: JSX.Element
+    results: HighlightedTextProps[]
+}
+
+function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: State<number>): RenderedFiles {
+    let files = useLocalStorage<Loaded<string[]>>(`fuzzy-modal.${props.repoName}.${props.commitID}`, {
         key: 'empty',
     })
-    console.log(files.key)
-    if (files.key === 'ready' && files.value.length === 0) {
-        files = { key: 'empty' }
+
+    function empty(elem: JSX.Element): RenderedFiles {
+        return {
+            element: elem,
+            results: [],
+        }
     }
 
-    switch (files.key) {
+    switch (files.value.key) {
         case 'empty':
             let request = requestGraphQL(
                 gql`
@@ -105,58 +137,65 @@ function renderFiles(props: FuzzyModalProps, query: string): JSX.Element {
                     commit: props.commitID,
                 }
             )
-            setFiles({ key: 'loading' })
+            files.set({ key: 'loading' })
             request.subscribe(
                 (e: any) => {
                     console.log(e.data)
                     const response = e.data.repository.commit.tree.files.map((f: any) => f.path) as string[]
                     if (response) {
-                        setFiles({
+                        files.set({
                             key: 'ready',
                             value: response,
                         })
                     } else {
-                        setFiles({
+                        files.set({
                             key: 'failed',
                             errorMessage: JSON.stringify(e.data),
                         })
                     }
                 },
                 e => {
-                    setFiles({
+                    files.set({
                         key: 'failed',
                         errorMessage: JSON.stringify(e),
                     })
                 }
             )
-            return <></>
+            return empty(<></>)
         case 'loading':
-            return <p>Loading...</p>
+            return empty(<p>Loading...</p>)
         case 'failed':
-            return <p>Error: {files.errorMessage}</p>
+            return empty(<p>Error: {files.value.errorMessage}</p>)
         case 'ready':
-            if (!files.fuzzy) {
-                files.fuzzy = new BloomFilterFuzzySearch(files.value)
+            if (!files.value.fuzzy) {
+                files.value.fuzzy = new BloomFilterFuzzySearch(files.value.value.map(f => ({ value: f, url: `/$f` })))
             }
-            console.log(files.fuzzy)
-            const matchingFiles = files.fuzzy.search({
-                value: query,
+            const matchingFiles = files.value.fuzzy.search({
+                value: query.value,
                 maxResults: MAX_RESULTS,
             }).values
 
             if (matchingFiles.length === 0) {
-                return <p>No files found matching query '{query}'</p>
+                return empty(<p>No files found matching query '{query}'</p>)
             }
-            return (
-                <ul className="fuzzy-modal-results">
-                    {matchingFiles.slice(0, MAX_RESULTS).map(file => (
-                        <li key={file.text}>
-                            <HighlightedText value={file} />
-                        </li>
-                    ))}
-                </ul>
-            )
+            const filesToRender = matchingFiles.slice(0, MAX_RESULTS)
+            return {
+                element: (
+                    <ul className="fuzzy-modal-results">
+                        {filesToRender.map((file, i) => (
+                            <li
+                                id={`fuzzy-modal-result-${i}`}
+                                key={file.text}
+                                className={i === focusIndex.value ? 'fuzzy-modal-focused' : ''}
+                            >
+                                <HighlightedText value={file} />
+                            </li>
+                        ))}
+                    </ul>
+                ),
+                results: filesToRender,
+            }
         default:
-            return <p>ERROR</p>
+            return empty(<p>ERROR</p>)
     }
 }

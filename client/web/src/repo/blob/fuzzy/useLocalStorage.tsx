@@ -1,7 +1,19 @@
 import { useState } from 'react'
 export type Dispatch<A> = (value: A) => void
 
-export function useLocalStorage<T>(key: string, initialValue: T): [T, Dispatch<T>] {
+export interface State<T> {
+    value: T
+    set(newValue: T): void
+}
+
+export function useEphemeralState<T>(initialValue: T): State<T> {
+    const [value, set] = useState(initialValue)
+    return {
+        value: value,
+        set: set,
+    }
+}
+export function useLocalStorage<T>(key: string, initialValue: T): State<T> {
     const [storedValue, setStoredValue] = useState(() => {
         try {
             const item = window.localStorage.getItem(key)
@@ -22,5 +34,8 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, Dispatch<T
         }
     }
 
-    return [storedValue, setValue]
+    return {
+        value: storedValue,
+        set: setValue,
+    }
 }

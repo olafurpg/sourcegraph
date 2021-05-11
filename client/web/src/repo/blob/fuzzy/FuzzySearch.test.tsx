@@ -1,11 +1,11 @@
 import { BloomFilterFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
 
 const all = ['to/the/moon.jpg', 'business/crazy.txt', 'fuzzy/business.txt', 'haha/business.txt', 'lol/business.txt']
-const fuzzy = new BloomFilterFuzzySearch(all)
+const fuzzy = new BloomFilterFuzzySearch(all.map(f => ({ value: f })))
 
 function checkSearch(query: string, expected: string[]) {
     test.only(`search-${query}`, () => {
-        const actual = fuzzy.search({ value: query, maxResults: 1000 }).map(t => t.text)
+        const actual = fuzzy.search({ value: query, maxResults: 1000 }).values.map(t => t.text)
         expect(actual).toStrictEqual(expected)
     })
 }
