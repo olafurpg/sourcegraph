@@ -1,10 +1,10 @@
 import { gql } from '@sourcegraph/shared/src/graphql/graphql'
 import React from 'react'
 import { requestGraphQL } from '../backend/graphql'
-import { BloomFilterFuzzySearch } from '../repo/blob/fuzzy/BloomFilterFuzzySearch'
-import { FuzzySearch, FuzzySearchResult } from '../repo/blob/fuzzy/FuzzySearch'
-import { HighlightedText, HighlightedTextProps } from '../repo/blob/fuzzy/HighlightedText'
-import { useEphemeralState, useLocalStorage, State } from '../repo/blob/fuzzy/useLocalStorage'
+import { BloomFilterFuzzySearch } from './BloomFilterFuzzySearch'
+import { FuzzySearch, FuzzySearchResult } from './FuzzySearch'
+import { HighlightedText, HighlightedTextProps } from './HighlightedText'
+import { useEphemeralState, useLocalStorage, State } from './useLocalStorage'
 
 const MAX_RESULTS = 100
 
