@@ -1,10 +1,10 @@
 import { BloomFilterFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
 
 const all = ['to/the/moon.jpg', 'business/crazy.txt', 'fuzzy/business.txt', 'haha/business.txt', 'lol/business.txt']
-const fuzzy = new BloomFilterFuzzySearch(all.map(f => ({ value: f })))
+const fuzzy = BloomFilterFuzzySearch.fromSearchValues(all.map(f => ({ value: f })))
 
 function checkSearch(query: string, expected: string[]) {
-    test.only(`search-${query}`, () => {
+    test(`search-${query}`, () => {
         const actual = fuzzy.search({ value: query, maxResults: 1000 }).values.map(t => t.text)
         expect(actual).toStrictEqual(expected)
     })
@@ -15,6 +15,7 @@ function checkParts(name: string, original: string, expected: string[]) {
         expect(allFuzzyParts(original)).toStrictEqual(expected)
     })
 }
+
 function checkFuzzyMatch(name: string, query: string, value: string, expected: string[]) {
     test(`fuzzyMatchesQuery-${name}`, () => {
         const obtained = fuzzyMatchesQuery(query, value)
@@ -26,32 +27,26 @@ function checkFuzzyMatch(name: string, query: string, value: string, expected: s
         expect(parts).toStrictEqual(expected)
     })
 }
-function checkNoFuzzyMatch(name: string, query: string, value: string) {
-    test(`!fuzzyMatchesQuery-${name}`, () => {
-        expect(fuzzyMatchesQuery(query, value)).toHaveLength(0)
-    })
-}
-
 checkParts('basic', 'haha/business.txt', ['haha', 'business', 'txt'])
 checkParts('snake_case', 'haha_business.txt', ['haha', 'business', 'txt'])
 checkParts('camelCase', 'hahaBusiness.txt', ['haha', 'Business', 'txt'])
 checkParts('CamelCase', 'HahaBusiness.txt', ['Haha', 'Business', 'txt'])
 checkParts('kebab-case', 'haha-business.txt', ['haha', 'business', 'txt'])
-// checkParts("kebab-case", "haha-business.txt", ["haha", "business", "txt"]);
+checkParts('kebab-case', 'haha-business.txt', ['haha', 'business', 'txt'])
 
 checkFuzzyMatch('basic', 'ha/busi', 'haha/business.txt', ['ha', 'busi'])
 
 checkSearch('h/bus', ['haha/business.txt'])
-// checkSearch("moon", ["to/the/moon.jpg"]);
-// checkSearch("t/moon", ["to/the/moon.jpg"]);
-// checkSearch("t/t/moon", ["to/the/moon.jpg"]);
-// checkSearch("t.t.moon", ["to/the/moon.jpg"]);
-// checkSearch("t t moon", ["to/the/moon.jpg"]);
-// checkSearch("jpg", ["to/the/moon.jpg"]);
-// checkSearch("t", all);
+checkSearch('moon', ['to/the/moon.jpg'])
+checkSearch('t/moon', ['to/the/moon.jpg'])
+checkSearch('t/t/moon', ['to/the/moon.jpg'])
+checkSearch('t.t.moon', ['to/the/moon.jpg'])
+checkSearch('t t moon', ['to/the/moon.jpg'])
+checkSearch('jpg', ['to/the/moon.jpg'])
+checkSearch('t', all)
 
-// checkSearch("t/m", ["to/the/moon.jpg"]);
-// checkSearch("mo", ["to/the/moon.jpg"]);
+checkSearch('t/m', ['to/the/moon.jpg'])
+checkSearch('mo', ['to/the/moon.jpg'])
 
 // TODO: start with dot '.'
 // checkSearch("github", [".github/workflows/foo.yml"]);

@@ -75,9 +75,11 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                                         props.onClose()
                                         break
                                     case 'ArrowDown':
+                                        e.preventDefault() // Don't move the cursor
                                         setRoundedFocusIndex(focusIndex.value + 1)
                                         break
                                     case 'ArrowUp':
+                                        e.preventDefault() // Don't move the cursor
                                         setRoundedFocusIndex(focusIndex.value - 1)
                                         break
                                     case 'Enter':
@@ -89,7 +91,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                                         }
                                         break
                                     default:
-                                        console.log(e.key)
+                                    // console.log(e.key)
                                 }
                             }}
                         />
@@ -123,24 +125,22 @@ function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: S
         }
     }
 
+    const usuallyFast =
+        "This step is usually fast unless it's a very large repository. The result is cached so you only have to wait for it once :)"
+
     switch (files.value.key) {
         case 'empty':
             handleEmpty(props, files)
             return empty(<></>)
         case 'loading':
-            return empty(<p>Downloading all filenames in this repository...</p>)
+            return empty(<p>Downloading... {usuallyFast}</p>)
         case 'failed':
             return empty(<p>Error: {files.value.errorMessage}</p>)
         case 'indexing':
             handleIndexing(props, files.value.value).then(next => {
                 files.set(next)
             })
-            return empty(
-                <p>
-                    Indexing... This step is usually very fast unless the repo has a large number of files. The indexing
-                    step is cached so you only have to wait for it once :)
-                </p>
-            )
+            return empty(<p>Indexing... {usuallyFast}</p>)
         case 'ready':
             let fuzzyResult = cachedResult.get(query.value)
             if (!fuzzyResult) {
@@ -205,7 +205,6 @@ async function handleIndexing(props: FuzzyModalProps, files: string[]): Promise<
     const cache = await openCaches()
     const text = serializeIndex(result)
     if (text) {
-        console.log(text)
         await cache.put(new Request(filesCacheKey(props)), text)
     }
     return result
@@ -220,7 +219,6 @@ async function deserializeIndex(ready: Response): Promise<Ready> {
 
 function serializeIndex(ready: Ready): Response | undefined {
     const serializable = ready.fuzzy.serialize()
-    console.log(serializable)
     return serializable ? new Response(JSON.stringify(serializable)) : undefined
 }
 
