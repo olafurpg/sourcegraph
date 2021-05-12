@@ -3,12 +3,6 @@ import { BloomFilter } from './BloomFilter'
 import { HighlightedTextProps, RangePosition } from './HighlightedText'
 import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from './FuzzySearch'
 
-function isCaseInsensitiveQuery(query: string): boolean {
-    return isLowercase(query)
-}
-function isLowercase(str: string): boolean {
-    return str.toLowerCase() === str && str !== str.toUpperCase()
-}
 function isUppercase(str: string): boolean {
     return str.toUpperCase() === str && str !== str.toLowerCase()
 }
@@ -29,21 +23,11 @@ function isDelimeter(ch: string): boolean {
 }
 
 const MAX_VALUE_LENGTH = 100
-const SMALL_QUERY_SIZE = 3
-
-function isSmallQuery(query: string): boolean {
-    return query.length <= SMALL_QUERY_SIZE
-}
-const SMALL_QUERY_MAGIC = '😅'
 
 export function fuzzyMatchesQuery(query: string, value: string): RangePosition[] {
-    const isCaseInsensitive = query === query.toLowerCase()
-    return fuzzyMatches(allFuzzyParts(query), value, isCaseInsensitive)
+    return fuzzyMatches(allFuzzyParts(query), value)
 }
-export function fuzzyMatches(queries: string[], value: string, isCaseInsensitive: boolean): RangePosition[] {
-    if (isCaseInsensitive) {
-        value = value.toLowerCase()
-    }
+export function fuzzyMatches(queries: string[], value: string): RangePosition[] {
     const result: RangePosition[] = []
     var queryIndex = 0
     var start = 0
@@ -94,7 +78,7 @@ function populateBloomFilter(values: SearchValue[]): BloomFilter {
     })
     return hashes
 }
-function allQueryHashParts(query: string, isExact: boolean): number[] {
+function allQueryHashParts(query: string): number[] {
     const fuzzyParts = allFuzzyParts(query)
     const result: number[] = []
     const H = new Hasher()
@@ -108,29 +92,19 @@ function allQueryHashParts(query: string, isExact: boolean): number[] {
         // console.log(`part=${part} digest=${digest} chars=${chars.join("")}`);
         result.push(digest)
     }
-    if (result.length === 1 && fuzzyParts.length === 1 && isExact) {
-        result.push(H.update(SMALL_QUERY_MAGIC).digest())
-    }
     return result
 }
 
 function updateHashParts(value: string, buf: BloomFilter): void {
     let H = new Hasher()
-    let size = 0
     for (var i = 0; i < value.length; i++) {
         const ch = value[i]
         if (isDelimeterOrUppercase(ch)) {
-            if (size <= SMALL_QUERY_SIZE) {
-                H.update(SMALL_QUERY_MAGIC)
-                buf.add(H.digest())
-            }
             H.reset()
-            size = 0
         }
         if (isDelimeter(ch)) continue
         H.update(ch)
         const digest = H.digest()
-        // console.log(`chars=${chars.join("")} digest=${digest}`);
         buf.add(digest)
     }
 }
@@ -143,9 +117,10 @@ interface BucketResult {
 class Bucket {
     constructor(readonly files: SearchValue[], readonly filter: BloomFilter, readonly id: number) {}
     public static fromSearchValues(files: SearchValue[]): Bucket {
+        files.sort((a, b) => a.value.length - b.value.length)
         return new Bucket(files, populateBloomFilter(files), Math.random())
     }
-    public static fromParsedJson(json: any): Bucket {
+    public static fromSerializedString(json: any): Bucket {
         return new Bucket(json.files, new BloomFilter(json.filter, DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT), json.id)
     }
     public serialize(): any {
@@ -158,17 +133,14 @@ class Bucket {
     private matchesMaybe(hashParts: number[]): boolean {
         return hashParts.every(num => this.filter.test(num))
     }
-    public matches(query: string, hashParts: number[], isCaseInsensitive: boolean): BucketResult {
+    public matches(query: string, hashParts: number[]): BucketResult {
         const matchesMaybe = this.matchesMaybe(hashParts)
-        // console.log(
-        //   `query=${query} matchesMaybe=${matchesMaybe} hashParts=${hashParts}`
-        // );
         if (!matchesMaybe) return { skipped: true, value: [] }
         const result: HighlightedTextProps[] = []
         const queryParts = allFuzzyParts(query)
         for (var i = 0; i < this.files.length; i++) {
             const file = this.files[i]
-            const positions = fuzzyMatches(queryParts, file.value, isCaseInsensitive)
+            const positions = fuzzyMatches(queryParts, file.value)
             if (positions.length > 0) {
                 result.push(new HighlightedTextProps(file.value, positions, file.url))
             }
@@ -214,7 +186,7 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
 
     public static fromSerializedString(text: string): BloomFilterFuzzySearch {
         const json = JSON.parse(text) as any
-        return new BloomFilterFuzzySearch(json.buckets.map(Bucket.fromParsedJson), json.BUCKET_SIZE)
+        return new BloomFilterFuzzySearch(json.buckets.map(Bucket.fromSerializedString), json.BUCKET_SIZE)
     }
 
     private actualQuery(query: string): string {
@@ -226,15 +198,8 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
         if (query.value.length === 0) return this.emptyResult(query)
         const result: HighlightedTextProps[] = []
         const finalQuery = this.actualQuery(query.value)
-        const isExact = isSmallQuery(query.value)
-        const isCaseInsensitive = isCaseInsensitiveQuery(query.value)
-        const isVisited = new Set<number>()
-        const hashParts = allQueryHashParts(finalQuery, isExact)
-        this.updateSearchResults(finalQuery, hashParts, isCaseInsensitive, result, isVisited)
-        if (isExact && result.length < query.maxResults) {
-            const nonExactParts = allQueryHashParts(finalQuery, false)
-            this.updateSearchResults(finalQuery, nonExactParts, isCaseInsensitive, result, isVisited)
-        }
+        const hashParts = allQueryHashParts(finalQuery)
+        this.updateSearchResults(finalQuery, hashParts, result)
         return this.sorted({
             values: result,
             isComplete: true,
@@ -272,19 +237,10 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
         return complete(true)
     }
 
-    private updateSearchResults(
-        finalQuery: string,
-        hashParts: number[],
-        isCaseInsensitive: boolean,
-        result: HighlightedTextProps[],
-        isVisited: Set<number>
-    ): void {
+    private updateSearchResults(finalQuery: string, hashParts: number[], result: HighlightedTextProps[]): void {
         this.buckets.forEach(bucket => {
-            if (!isVisited.has(bucket.id)) {
-                const matches = bucket.matches(finalQuery, hashParts, isCaseInsensitive)
-                if (!matches.skipped) isVisited.add(bucket.id)
-                result.push(...matches.value)
-            }
+            const matches = bucket.matches(finalQuery, hashParts)
+            result.push(...matches.value)
         })
     }
 }
