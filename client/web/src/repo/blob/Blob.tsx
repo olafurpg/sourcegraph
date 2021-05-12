@@ -48,11 +48,6 @@ import { StatusBar } from '../../extensions/components/StatusBar'
 import { HoverThresholdProps } from '../RepoContainer'
 
 import { LineDecorator } from './LineDecorator'
-import { Shortcut } from '@slimsag/react-shortcuts'
-import { KEYBOARD_SHORTCUT_FUZZY_FILES } from '../../keyboardShortcuts/keyboardShortcuts'
-import { requestGraphQL } from '../../backend/graphql'
-import { FuzzyFiles } from './FuzzyFiles'
-// import { graphQL } from 'sourcegraph'
 
 /**
  * toPortalID builds an ID that will be used for the {@link LineDecorator} portal containers.
