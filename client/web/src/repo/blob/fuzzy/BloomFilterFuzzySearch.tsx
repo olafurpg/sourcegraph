@@ -21,27 +21,35 @@ function isDelimeter(ch: string): boolean {
             return false
     }
 }
-function startsFuzzyPart(value: string, i: number): boolean {
-    const ch = value[i]
-    return !isDelimeter(ch) && (isUppercase(value[i]) || isDelimeter(value[i - 1]))
-}
 
 const MAX_VALUE_LENGTH = 100
 
 export function fuzzyMatchesQuery(query: string, value: string): RangePosition[] {
-    return fuzzyMatches(allFuzzyParts(query), value)
+    return fuzzyMatches(allFuzzyParts(query, true), value)
 }
 export function fuzzyMatches(queries: string[], value: string): RangePosition[] {
     const result: RangePosition[] = []
-    console.log(queries)
     var queryIndex = 0
+    function query(): string {
+        return queries[queryIndex]
+    }
+    function isQueryDelimeter(): boolean {
+        return isDelimeter(query())
+    }
+    function indexOfDelimeter(delim: string, i: number) {
+        const index = value.indexOf(delim, i)
+        return index < 0 ? value.length : index
+    }
     var start = 0
     while (queryIndex < queries.length && start < value.length) {
-        const query = queries[queryIndex]
-        while (isDelimeter(value[start])) start++
-        // console.log(JSON.stringify(value[start]))
-        if (value.startsWith(query, start)) {
-            const end = start + query.length
+        const isCurrentQueryDelimeter = isQueryDelimeter()
+        while (!isQueryDelimeter() && isDelimeter(value[start])) start++
+        // console.log('query=' + JSON.stringify(query()))
+        // console.log('isQueryDelimeter=' + isQueryDelimeter())
+        // console.log('value.substring(start)=' + JSON.stringify(value.substring(start)))
+        // console.log('value.startsWith(query(), start)=' + value.startsWith(query(), start))
+        if (value.startsWith(query(), start)) {
+            const end = start + query().length
             result.push({
                 startOffset: start,
                 endOffset: end,
@@ -49,24 +57,28 @@ export function fuzzyMatches(queries: string[], value: string): RangePosition[] 
             })
             queryIndex++
         }
-        let end = nextFuzzyPart(value, start + 1)
-        while (end < value.length && isDelimeter(value[end])) end++
+        const nextStart = isCurrentQueryDelimeter ? start : start + 1
+        let end = isQueryDelimeter() ? indexOfDelimeter(query(), nextStart) : nextFuzzyPart(value, nextStart)
+        while (end < value.length && !isQueryDelimeter && isDelimeter(value[end])) end++
         start = end
     }
+    // console.log(result)
     return queryIndex >= queries.length ? result : []
 }
-export function allFuzzyParts(value: string): string[] {
+export function allFuzzyParts(value: string, includeDelimeters: boolean = false): string[] {
     const buf: string[] = []
     var start = 0
     for (var end = 0; end < value.length; end = nextFuzzyPart(value, end)) {
         // console.log(JSON.stringify(value.substring(start, end)))
-        // console.log(JSON.stringify(value.substring(start, end - 1)))
         if (end > start) {
-            // let actualEnd = end
-            // while (actualEnd > 0 && isDelimeter(value[actualEnd - 1])) actualEnd--
             buf.push(value.substring(start, end))
         }
-        while (end < value.length && isDelimeter(value[end])) end++
+        while (end < value.length && isDelimeter(value[end])) {
+            if (includeDelimeters) {
+                buf.push(value[end])
+            }
+            end++
+        }
         start = end
         end++
     }
