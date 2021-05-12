@@ -33,7 +33,7 @@ export function fuzzyMatchesQuery(query: string, value: string): RangePosition[]
 }
 export function fuzzyMatches(queries: string[], value: string): RangePosition[] {
     const result: RangePosition[] = []
-    // console.log(queries)
+    console.log(queries)
     var queryIndex = 0
     var start = 0
     while (queryIndex < queries.length && start < value.length) {
