@@ -7,8 +7,7 @@ const all = [
     'haha/business.txt',
     'business/crazy.txt',
     'fuzzy/business.txt',
-    // 'Documentation/README.txt',
-    '.ts/workflows/config.json',
+    '.travis/workflows/config.json',
 ]
 
 const fuzzy = BloomFilterFuzzySearch.fromSearchValues(all.map(f => ({ value: f })))
@@ -58,9 +57,11 @@ checkSearch('jpg', ['to/the/moon.jpg'])
 checkSearch('t/m', ['to/the/moon.jpg'])
 checkSearch('mo', ['to/the/moon.jpg'])
 checkSearch('t', all)
-// checkSearch('readme', ["Documentation/README>md"])
 
 checkFuzzyMatch('consume-delimeter-negative', 'ts/json', '.tsconfig.json', [])
 checkFuzzyMatch('consume-delimeter-positive', 'ts/json', '.tsconfig/json', ['ts', '/', 'json'])
 checkFuzzyMatch('consume-delimeter-end-of-word', 'ts/', '.tsconfig/json', ['ts', '/'])
 checkFuzzyMatch('consume-delimeter-start-of-word', '.ts/', '.tsconfig/json', ['.', 'ts', '/'])
+
+// TODO: treat all-lowercase queries as case insensitive
+// checkSearch('readme', ["Documentation/README.md"])
