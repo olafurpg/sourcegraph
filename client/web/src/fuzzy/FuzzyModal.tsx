@@ -2,7 +2,7 @@ import { gql } from '@sourcegraph/shared/src/graphql/graphql'
 import React from 'react'
 import { requestGraphQL } from '../backend/graphql'
 import { BloomFilterFuzzySearch } from '../repo/blob/fuzzy/BloomFilterFuzzySearch'
-import { FuzzySearch } from '../repo/blob/fuzzy/FuzzySearch'
+import { FuzzySearch, FuzzySearchResult } from '../repo/blob/fuzzy/FuzzySearch'
 import { HighlightedText, HighlightedTextProps } from '../repo/blob/fuzzy/HighlightedText'
 import { useEphemeralState, useLocalStorage, State } from '../repo/blob/fuzzy/useLocalStorage'
 
@@ -16,10 +16,14 @@ interface Loading {
     key: 'loading'
 }
 
-interface Ready<T> {
+interface Indexing {
+    key: 'indexing'
+    value: string[]
+}
+
+interface Ready {
     key: 'ready'
-    value: T
-    fuzzy?: FuzzySearch
+    fuzzy: FuzzySearch
 }
 
 interface Failed {
@@ -27,7 +31,8 @@ interface Failed {
     errorMessage: string
 }
 
-type Loaded<T> = Empty | Loading | Ready<T> | Failed
+type Loaded = Empty | Loading | Indexing | Ready | Failed
+type FilesState = State<Loaded>
 
 export interface FuzzyModalProps {
     isVisible: boolean
@@ -40,7 +45,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
     if (!props.isVisible) {
         return null
     }
-    const query = useLocalStorage('fuzzy-modal.query', '')
+    const query = useLocalStorage(`fuzzy-modal.query.${props.repoName}`, '')
     const focusIndex = useEphemeralState(0)
     const body = renderFiles(props, query, focusIndex)
     function setRoundedFocusIndex(newNumber: number) {
@@ -106,11 +111,10 @@ interface RenderedFiles {
     element: JSX.Element
     results: HighlightedTextProps[]
 }
+const cachedResult = new Map<string, FuzzySearchResult>()
 
 function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: State<number>): RenderedFiles {
-    let files = useLocalStorage<Loaded<string[]>>(`fuzzy-modal.${props.repoName}.${props.commitID}`, {
-        key: 'empty',
-    })
+    let files = useEphemeralState<Loaded>({ key: 'empty' })
 
     function empty(elem: JSX.Element): RenderedFiles {
         return {
@@ -121,67 +125,36 @@ function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: S
 
     switch (files.value.key) {
         case 'empty':
-            let request = requestGraphQL(
-                gql`
-                    query Files($repository: String!, $commit: String!) {
-                        repository(name: $repository) {
-                            commit(rev: $commit) {
-                                tree(recursive: true) {
-                                    files(first: 1000000, recursive: true) {
-                                        path
-                                    }
-                                }
-                            }
-                        }
-                    }
-                `,
-                {
-                    repository: props.repoName,
-                    commit: props.commitID,
-                }
-            )
-            files.set({ key: 'loading' })
-            request.subscribe(
-                (e: any) => {
-                    console.log(e.data)
-                    const response = e.data.repository.commit.tree.files.map((f: any) => f.path) as string[]
-                    if (response) {
-                        files.set({
-                            key: 'ready',
-                            value: response,
-                        })
-                    } else {
-                        files.set({
-                            key: 'failed',
-                            errorMessage: JSON.stringify(e.data),
-                        })
-                    }
-                },
-                e => {
-                    files.set({
-                        key: 'failed',
-                        errorMessage: JSON.stringify(e),
-                    })
-                }
-            )
+            handleEmpty(props, files)
             return empty(<></>)
         case 'loading':
-            return empty(<p>Loading...</p>)
+            return empty(<p>Downloading all filenames in this repository...</p>)
         case 'failed':
             return empty(<p>Error: {files.value.errorMessage}</p>)
+        case 'indexing':
+            handleIndexing(props, files.value.value).then(next => {
+                files.set(next)
+            })
+            return empty(
+                <p>
+                    Indexing... This step is usually very fast unless the repo has a large number of files. The indexing
+                    step is cached so you only have to wait for it once :)
+                </p>
+            )
         case 'ready':
-            if (!files.value.fuzzy) {
-                files.value.fuzzy = new BloomFilterFuzzySearch(
-                    files.value.value.map(f => ({ value: f, url: `/${props.repoName}@${props.commitID}/-/blob/${f}` }))
-                )
+            let fuzzyResult = cachedResult.get(query.value)
+            if (!fuzzyResult) {
+                fuzzyResult = files.value.fuzzy.search({
+                    value: query.value,
+                    maxResults: MAX_RESULTS,
+                })
+                cachedResult.clear() // Only store one result
+                cachedResult.set(query.value, fuzzyResult)
             }
-            const matchingFiles = files.value.fuzzy.search({
-                value: query.value,
-                maxResults: MAX_RESULTS,
-            }).values
+            const matchingFiles = fuzzyResult.values
 
             if (matchingFiles.length === 0) {
-                return empty(<p>No files found matching query '{query}'</p>)
+                return empty(<p>No files matching '{query.value}'</p>)
             }
             const filesToRender = matchingFiles.slice(0, MAX_RESULTS)
             return {
@@ -196,11 +169,113 @@ function renderFiles(props: FuzzyModalProps, query: State<string>, focusIndex: S
                                 <HighlightedText value={file} />
                             </li>
                         ))}
+                        {!fuzzyResult.isComplete && (
+                            <li>(...truncated, type more characters to see additional results)</li>
+                        )}
                     </ul>
                 ),
                 results: filesToRender,
             }
         default:
             return empty(<p>ERROR</p>)
+    }
+}
+
+function filesCacheKey(props: FuzzyModalProps): string {
+    return `/fuzzy-modal.files.${props.repoName}.${props.commitID}`
+}
+
+function openCaches(): Promise<Cache> {
+    return caches.open('fuzzy-modal')
+}
+
+async function handleIndexing(props: FuzzyModalProps, files: string[]): Promise<Ready> {
+    const result = await new Promise<Ready>(resolve =>
+        setTimeout(
+            () =>
+                resolve({
+                    key: 'ready',
+                    fuzzy: BloomFilterFuzzySearch.fromSearchValues(
+                        files.map(f => ({ value: f, url: `/${props.repoName}@${props.commitID}/-/blob/${f}` }))
+                    ),
+                }),
+            0
+        )
+    )
+    const cache = await openCaches()
+    const text = serializeIndex(result)
+    if (text) {
+        console.log(text)
+        await cache.put(new Request(filesCacheKey(props)), text)
+    }
+    return result
+}
+
+async function deserializeIndex(ready: Response): Promise<Ready> {
+    return {
+        key: 'ready',
+        fuzzy: BloomFilterFuzzySearch.fromSerializedString(await ready.text()),
+    }
+}
+
+function serializeIndex(ready: Ready): Response | undefined {
+    const serializable = ready.fuzzy.serialize()
+    console.log(serializable)
+    return serializable ? new Response(JSON.stringify(serializable)) : undefined
+}
+
+async function handleEmpty(props: FuzzyModalProps, files: FilesState): Promise<void> {
+    const cache = await openCaches()
+    const cacheKey = filesCacheKey(props)
+    const cacheRequest = new Request(cacheKey)
+    const fromCache = await cache.match(cacheRequest)
+    if (fromCache) {
+        files.set(await deserializeIndex(fromCache))
+    } else {
+        let request = requestGraphQL(
+            gql`
+                query Files($repository: String!, $commit: String!) {
+                    repository(name: $repository) {
+                        commit(rev: $commit) {
+                            tree(recursive: true) {
+                                files(first: 1000000, recursive: true) {
+                                    path
+                                }
+                            }
+                        }
+                    }
+                }
+            `,
+            {
+                repository: props.repoName,
+                commit: props.commitID,
+            }
+        )
+        files.set({ key: 'loading' })
+        request.subscribe(
+            (e: any) => {
+                const response = e.data?.repository?.commit?.tree?.files?.map((f: any) => f.path) as
+                    | string[]
+                    | undefined
+                if (response) {
+                    cache.put(cacheRequest, new Response(JSON.stringify(response)))
+                    files.set({
+                        key: 'indexing',
+                        value: response,
+                    })
+                } else {
+                    files.set({
+                        key: 'failed',
+                        errorMessage: JSON.stringify(e.data),
+                    })
+                }
+            },
+            e => {
+                files.set({
+                    key: 'failed',
+                    errorMessage: JSON.stringify(e),
+                })
+            }
+        )
     }
 }

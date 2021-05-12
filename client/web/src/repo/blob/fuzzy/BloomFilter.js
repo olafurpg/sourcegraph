@@ -42,6 +42,8 @@
   // number of bits.  Note that *m* is rounded up to the nearest multiple of
   // 32.  *k* specifies the number of hashing functions.
   function BloomFilter(m, k) {
+    var a
+    if (typeof m !== 'number') (a = m), (m = a.length * 32)
     var n = Math.ceil(m / 32),
       i = -1
     this.m = m = n * 32
@@ -51,6 +53,7 @@
       array = kbytes === 1 ? Uint8Array : kbytes === 2 ? Uint16Array : Uint32Array,
       kbuffer = new ArrayBuffer(kbytes * k)
     this.buckets = new Int32Array(n)
+    if (a) while (++i < n) this.buckets[i] = a[i]
     this._locations = new array(kbuffer)
   }
 

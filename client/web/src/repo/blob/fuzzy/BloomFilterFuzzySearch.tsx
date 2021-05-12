@@ -83,8 +83,10 @@ export function nextFuzzyPart(value: string, start: number): number {
     while (end < value.length && !isDelimeterOrUppercase(value[end])) end++
     return end
 }
+const DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT = 8
+const DEFAULT_BLOOM_FILTER_SIZE = 2 << 17
 function populateBloomFilter(values: SearchValue[]): BloomFilter {
-    let hashes = new BloomFilter(2 << 17, 8)
+    let hashes = new BloomFilter(DEFAULT_BLOOM_FILTER_SIZE, DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT)
     values.forEach(value => {
         if (value.value.length < MAX_VALUE_LENGTH) {
             updateHashParts(value.value, hashes)
@@ -139,12 +141,18 @@ interface BucketResult {
 }
 
 class Bucket {
-    filter: BloomFilter
-    id: number
-    constructor(readonly files: SearchValue[]) {
-        // console.log(`files=${files} hashes=${hashes}`);
-        this.filter = populateBloomFilter(files)
-        this.id = Math.random()
+    constructor(readonly files: SearchValue[], readonly filter: BloomFilter, readonly id: number) {}
+    public static fromSearchValues(files: SearchValue[]): Bucket {
+        return new Bucket(files, populateBloomFilter(files), Math.random())
+    }
+    public static fromParsedJson(json: any): Bucket {
+        return new Bucket(json.files, new BloomFilter(json.filter, DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT), json.id)
+    }
+    public serialize(): any {
+        return {
+            files: this.files,
+            filter: [].slice.call(this.filter.buckets),
+        }
     }
 
     private matchesMaybe(hashParts: number[]): boolean {
@@ -174,22 +182,41 @@ export interface SearchValue {
     url?: string
 }
 
+const DEFAULT_BUCKET_SIZE = 500
+
 export class BloomFilterFuzzySearch extends FuzzySearch {
-    buckets: Bucket[]
-    BUCKET_SIZE = 500
-    constructor(readonly files: SearchValue[]) {
+    constructor(readonly buckets: Bucket[], readonly BUCKET_SIZE: number = DEFAULT_BUCKET_SIZE) {
         super()
-        this.buckets = []
+    }
+    public static fromSearchValues(
+        files: SearchValue[],
+        BUCKET_SIZE: number = DEFAULT_BUCKET_SIZE
+    ): BloomFilterFuzzySearch {
+        const buckets = []
         let buffer: SearchValue[] = []
         files.forEach(file => {
             buffer.push(file)
-            if (buffer.length >= this.BUCKET_SIZE) {
-                this.buckets.push(new Bucket(buffer))
+            if (buffer.length >= BUCKET_SIZE) {
+                buckets.push(Bucket.fromSearchValues(buffer))
                 buffer = []
             }
         })
-        if (buffer) this.buckets.push(new Bucket(buffer))
+        if (buffer) buckets.push(Bucket.fromSearchValues(buffer))
+        return new BloomFilterFuzzySearch(buckets, BUCKET_SIZE)
     }
+
+    public serialize(): any {
+        return {
+            buckets: this.buckets.map(b => b.serialize()),
+            BUCKET_SIZE: this.BUCKET_SIZE,
+        }
+    }
+
+    public static fromSerializedString(text: string): BloomFilterFuzzySearch {
+        const json = JSON.parse(text) as any
+        return new BloomFilterFuzzySearch(json.buckets.map(Bucket.fromParsedJson), json.BUCKET_SIZE)
+    }
+
     private actualQuery(query: string): string {
         let end = query.length - 1
         while (end > 0 && isDelimeter(query[end])) end--
