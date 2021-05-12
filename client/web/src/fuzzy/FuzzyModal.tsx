@@ -98,7 +98,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
                 </div>
                 <div className="fuzzy-modal-body">{body.element}</div>
                 <div className="fuzzy-modal-footer">
-                    <button className="button" onClick={props.onClose}>
+                    <button className="btn btn-secondary" onClick={props.onClose}>
                         Close
                     </button>
                 </div>
