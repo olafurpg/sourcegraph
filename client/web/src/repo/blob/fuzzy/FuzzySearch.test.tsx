@@ -21,7 +21,7 @@ function checkSearch(query: string, expected: string[]) {
 
 function checkParts(name: string, original: string, expected: string[]) {
     test(`allFuzzyParts-${name}`, () => {
-        expect(allFuzzyParts(original)).toStrictEqual(expected)
+        expect(allFuzzyParts(original, false)).toStrictEqual(expected)
     })
 }
 
@@ -51,8 +51,8 @@ checkSearch('h/bus', ['haha/business.txt'])
 checkSearch('moon', ['to/the/moon.jpg'])
 checkSearch('t/moon', ['to/the/moon.jpg'])
 checkSearch('t/t/moon', ['to/the/moon.jpg'])
-checkSearch('t.t.moon', ['to/the/moon.jpg'])
-checkSearch('t t moon', ['to/the/moon.jpg'])
+checkSearch('t.t.moon', [])
+checkSearch('t t moon', [])
 checkSearch('jpg', ['to/the/moon.jpg'])
 checkSearch('t/m', ['to/the/moon.jpg'])
 checkSearch('mo', ['to/the/moon.jpg'])
@@ -60,3 +60,4 @@ checkSearch('t', all)
 
 checkFuzzyMatch('consume-delimeter-negative', 'ts/json', '.tsconfig.json', [])
 checkFuzzyMatch('consume-delimeter-positive', 'ts/json', '.tsconfig/json', ['ts', '/', 'json'])
+checkFuzzyMatch('consume-delimeter-end-of-word', 'ts/', '.tsconfig/json', ['ts', '/'])

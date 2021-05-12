@@ -41,6 +41,7 @@ export function fuzzyMatches(queries: string[], value: string): RangePosition[] 
         return index < 0 ? value.length : index
     }
     var start = 0
+    // console.log(queries)
     while (queryIndex < queries.length && start < value.length) {
         const isCurrentQueryDelimeter = isQueryDelimeter()
         while (!isQueryDelimeter() && isDelimeter(value[start])) start++
@@ -65,12 +66,13 @@ export function fuzzyMatches(queries: string[], value: string): RangePosition[] 
     // console.log(result)
     return queryIndex >= queries.length ? result : []
 }
-export function allFuzzyParts(value: string, includeDelimeters: boolean = false): string[] {
+export function allFuzzyParts(value: string, includeDelimeters: boolean): string[] {
     const buf: string[] = []
     var start = 0
     for (var end = 0; end < value.length; end = nextFuzzyPart(value, end)) {
         // console.log(JSON.stringify(value.substring(start, end)))
         if (end > start) {
+            // console.log(JSON.stringify(value.substring(start, end)))
             buf.push(value.substring(start, end))
         }
         while (end < value.length && isDelimeter(value[end])) {
@@ -82,7 +84,11 @@ export function allFuzzyParts(value: string, includeDelimeters: boolean = false)
         start = end
         end++
     }
-    buf.push(value.substring(start, end))
+
+    if (start < value.length && end > start) {
+        buf.push(value.substring(start, end))
+    }
+
     return buf
 }
 export function nextFuzzyPart(value: string, start: number): number {
@@ -103,7 +109,7 @@ function populateBloomFilter(values: SearchValue[]): BloomFilter {
     return hashes
 }
 function allQueryHashParts(query: string): number[] {
-    const fuzzyParts = allFuzzyParts(query)
+    const fuzzyParts = allFuzzyParts(query, false)
     const result: number[] = []
     const H = new Hasher()
     // let chars: string[] = []
@@ -170,7 +176,7 @@ class Bucket {
         const matchesMaybe = this.matchesMaybe(hashParts)
         if (!matchesMaybe) return { skipped: true, value: [] }
         const result: HighlightedTextProps[] = []
-        const queryParts = allFuzzyParts(query)
+        const queryParts = allFuzzyParts(query, true)
         for (var i = 0; i < this.files.length; i++) {
             const file = this.files[i]
             const positions = fuzzyMatches(queryParts, file.value)
@@ -222,16 +228,16 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
         return new BloomFilterFuzzySearch(json.buckets.map(Bucket.fromSerializedString), json.BUCKET_SIZE)
     }
 
-    private actualQuery(query: string): string {
-        let end = query.length - 1
-        while (end > 0 && isDelimeter(query[end])) end--
-        return query.substring(0, end + 1)
-    }
+    // private actualQuery(query: string): string {
+    //     let end = query.length - 1
+    //     while (end > 0 && isDelimeter(query[end])) end--
+    //     return query.substring(0, end + 1)
+    // }
     public search(query: FuzzySearchParameters): FuzzySearchResult {
         if (query.value.length === 0) return this.emptyResult(query)
         const self = this
         const result: HighlightedTextProps[] = []
-        const finalQuery = this.actualQuery(query.value)
+        const finalQuery = query.value // this.actualQuery(query.value)
         const hashParts = allQueryHashParts(finalQuery)
         function complete(isComplete: boolean) {
             return self.sorted({ values: result, isComplete: isComplete })
