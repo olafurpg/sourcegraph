@@ -162,8 +162,13 @@
 }
 
 .fuzzy-modal-highlighted {
-    background-color: #ebdd4d;
     color: #000;
+}
+.fuzzy-modal-highlighted-fuzzy {
+    background-color: #756c00;
+}
+.fuzzy-modal-highlighted-exact {
+    background-color: #ebdd4d;
 }
 
 .fuzzy-modal-focused {

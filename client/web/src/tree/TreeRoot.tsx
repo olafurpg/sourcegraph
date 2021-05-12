@@ -203,36 +203,34 @@ export class TreeRoot extends React.Component<TreeRootProps, TreeRootState> {
                      * We should not be stealing focus here, we should let the user focus on the actual items listed.
                      * Issue: https://github.com/sourcegraph/sourcegraph/issues/19167
                      */
-                    <>
-                        <table className="tree-layer" tabIndex={0}>
-                            <tbody>
-                                <tr>
-                                    <td className="tree__cell">
-                                        {treeOrError === LOADING ? (
-                                            <div className="tree__row-loader">
-                                                <LoadingSpinner className="icon-inline tree-page__entries-loader" />
-                                                Loading tree
-                                            </div>
-                                        ) : (
-                                            treeOrError && (
-                                                <ChildTreeLayer
-                                                    {...this.props}
-                                                    parent={this.node}
-                                                    depth={-1 as number}
-                                                    entries={treeOrError.entries}
-                                                    singleChildTreeEntry={singleChildTreeEntry}
-                                                    childrenEntries={singleChildTreeEntry.children}
-                                                    onHover={this.fetchChildContents}
-                                                    setChildNodes={this.setChildNode}
-                                                    fileDecorationsByPath={this.state.fileDecorationsByPath}
-                                                />
-                                            )
-                                        )}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </>
+                    <table className="tree-layer" tabIndex={0}>
+                        <tbody>
+                            <tr>
+                                <td className="tree__cell">
+                                    {treeOrError === LOADING ? (
+                                        <div className="tree__row-loader">
+                                            <LoadingSpinner className="icon-inline tree-page__entries-loader" />
+                                            Loading tree
+                                        </div>
+                                    ) : (
+                                        treeOrError && (
+                                            <ChildTreeLayer
+                                                {...this.props}
+                                                parent={this.node}
+                                                depth={-1 as number}
+                                                entries={treeOrError.entries}
+                                                singleChildTreeEntry={singleChildTreeEntry}
+                                                childrenEntries={singleChildTreeEntry.children}
+                                                onHover={this.fetchChildContents}
+                                                setChildNodes={this.setChildNode}
+                                                fileDecorationsByPath={this.state.fileDecorationsByPath}
+                                            />
+                                        )
+                                    )}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 )}
             </>
         )
@@ -249,39 +247,3 @@ export class TreeRoot extends React.Component<TreeRootProps, TreeRootState> {
         this.node.childNodes[index] = node
     }
 }
-
-// <Shortcut
-//     {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
-//     onMatch={async e => {
-//         console.log('POOOP')
-//         console.log(props.blobInfo.repoName)
-//         console.log(props.blobInfo.commitID)
-//         let variables = {
-//             repository: props.blobInfo.repoName,
-//             commit: props.blobInfo.commitID,
-//         }
-//         let files = await requestGraphQL(
-//             `query Files($repository: String!, $commit: String!) {
-//                    repository(name: $repository) {
-//                      commit(rev: $commit) {
-//                        tree(recursive:true) {
-//                          files(first:1000000,recursive: true) {
-//                            path
-//                          }
-//                        }
-//                      }
-//                    }
-//                  }`,
-//             variables
-//         )
-//         console.log(
-//             files.subscribe((e: any) => {
-//                 const files = e.data.repository.commit.tree.files.map((f: any) => f.path)
-//                 setFuzzyFiles(files)
-//             })
-//         )
-//         // files.then(f => {
-//         //     console.log(f)
-//         // })
-//     }}
-// />

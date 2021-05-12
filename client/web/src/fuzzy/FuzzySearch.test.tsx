@@ -63,5 +63,5 @@ checkFuzzyMatch('consume-delimeter-positive', 'ts/json', '.tsconfig/json', ['ts'
 checkFuzzyMatch('consume-delimeter-end-of-word', 'ts/', '.tsconfig/json', ['ts', '/'])
 checkFuzzyMatch('consume-delimeter-start-of-word', '.ts/', '.tsconfig/json', ['.', 'ts', '/'])
 
-// TODO: treat all-lowercase queries as case insensitive
+// TODO(olafurpg): treat all-lowercase queries as case insensitive
 // checkSearch('readme', ["Documentation/README.md"])

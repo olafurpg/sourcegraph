@@ -3,6 +3,9 @@ import React from 'react'
 export interface RangePosition {
     startOffset: number
     endOffset: number
+    /**
+     * Does this range enclose an exact word?
+     */
     isExact: boolean
 }
 
@@ -29,10 +32,13 @@ export class HighlightedTextProps {
     }
 }
 
-interface HighlightedTextPropsInstance {
+export interface HighlightedTextPropsInstance {
     value: HighlightedTextProps
 }
 
+/**
+ * React component that re
+ */
 export const HighlightedText: React.FunctionComponent<HighlightedTextPropsInstance> = propsInstance => {
     const props = propsInstance.value
     const spans: JSX.Element[] = []
@@ -54,7 +60,8 @@ export const HighlightedText: React.FunctionComponent<HighlightedTextPropsInstan
             pushSpan('fuzzy-modal-plaintext', start, pos.startOffset)
         }
         start = pos.endOffset
-        pushSpan('fuzzy-modal-highlighted', pos.startOffset, pos.endOffset)
+        const classNameSuffix = pos.isExact ? 'exact' : 'fuzzy'
+        pushSpan(`fuzzy-modal-highlighted fuzzy-modal-highlighted-${classNameSuffix}`, pos.startOffset, pos.endOffset)
     }
     pushSpan('fuzzy-modal-plaintext', start, props.text.length)
 

@@ -25,6 +25,28 @@ export interface SearchValue {
 
 const DEFAULT_BUCKET_SIZE = 500
 
+/**
+ * Fuzzy search that uses bloom filters to improve performance in very large repositories.
+ *
+ * NOTE(olafur): this is a reimplementation of the fuzzy finder in the Scala
+ * language server that's documented in this blog post here
+ * https://scalameta.org/metals/blog/2019/01/22/bloom-filters.html#fuzzy-symbol-search
+ *
+ * In a nutshell, bloom filters improve performance by allowing us to skip a
+ * "bucket" of candidate files if we know that bucket does not match any words
+ * in that query. For example, the query "SymPro" is split into the words "Sym"
+ * and "Pro". If a bucket of 500 words is guaranteed to have to appearances of
+ * the words "Sym" and "Pro", then we can skip those 500 words and move on to
+ * the next bucket.
+ *
+ * One downside of the bloom filter approach is that it requires an indexing
+ * phase that can take a couple of seconds to complete on a large input size
+ * (>100k filenames). The indexing phase can take a while to complete because we
+ * need to compute all possible words that the user may query. For example,
+ * given the filename "SymbolProvider", we create a bloom filter with all
+ * possible prefixes of "Symbol" and "Provider". Fortunately, bloom filters can be
+ * serialized so that the indexing step only runs once per repoName/commitID pair.
+ */
 export class BloomFilterFuzzySearch extends FuzzySearch {
     constructor(readonly buckets: Bucket[], readonly BUCKET_SIZE: number = DEFAULT_BUCKET_SIZE) {
         super()
@@ -58,11 +80,6 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
         return new BloomFilterFuzzySearch(json.buckets.map(Bucket.fromSerializedString), json.BUCKET_SIZE)
     }
 
-    // private actualQuery(query: string): string {
-    //     let end = query.length - 1
-    //     while (end > 0 && isDelimeter(query[end])) end--
-    //     return query.substring(0, end + 1)
-    // }
     public search(query: FuzzySearchParameters): FuzzySearchResult {
         if (query.value.length === 0) return this.emptyResult(query)
         const self = this
@@ -117,12 +134,38 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
     }
 }
 
+export function allFuzzyParts(value: string, includeDelimeters: boolean): string[] {
+    const buf: string[] = []
+    var start = 0
+    for (var end = 0; end < value.length; end = nextFuzzyPart(value, end)) {
+        if (end > start) {
+            buf.push(value.substring(start, end))
+        }
+        while (end < value.length && isDelimeter(value[end])) {
+            if (includeDelimeters) {
+                buf.push(value[end])
+            }
+            end++
+        }
+        start = end
+        end++
+    }
+
+    if (start < value.length && end > start) {
+        buf.push(value.substring(start, end))
+    }
+
+    return buf
+}
+
 function isUppercase(str: string): boolean {
     return str.toUpperCase() === str && str !== str.toLowerCase()
 }
+
 function isDelimeterOrUppercase(ch: string): boolean {
     return isDelimeter(ch) || isUppercase(ch)
 }
+
 function isDelimeter(ch: string): boolean {
     switch (ch) {
         case '/':
@@ -150,14 +193,9 @@ function fuzzyMatches(queries: string[], value: string): RangePosition[] {
         return index < 0 ? value.length : index
     }
     var start = 0
-    // console.log(queries)
     while (queryIndex < queries.length && start < value.length) {
         const isCurrentQueryDelimeter = isQueryDelimeter()
         while (!isQueryDelimeter() && isDelimeter(value[start])) start++
-        // console.log('query=' + JSON.stringify(query()))
-        // console.log('isQueryDelimeter=' + isQueryDelimeter())
-        // console.log('value.substring(start)=' + JSON.stringify(value.substring(start)))
-        // console.log('value.startsWith(query(), start)=' + value.startsWith(query(), start))
         if (value.startsWith(query(), start)) {
             const end = start + query().length
             result.push({
@@ -172,38 +210,12 @@ function fuzzyMatches(queries: string[], value: string): RangePosition[] {
         while (end < value.length && !isQueryDelimeter && isDelimeter(value[end])) end++
         start = end
     }
-    // console.log(result)
     return queryIndex >= queries.length ? result : []
 }
-export function allFuzzyParts(value: string, includeDelimeters: boolean): string[] {
-    const buf: string[] = []
-    var start = 0
-    for (var end = 0; end < value.length; end = nextFuzzyPart(value, end)) {
-        // console.log(JSON.stringify(value.substring(start, end)))
-        if (end > start) {
-            // console.log(JSON.stringify(value.substring(start, end)))
-            buf.push(value.substring(start, end))
-        }
-        while (end < value.length && isDelimeter(value[end])) {
-            if (includeDelimeters) {
-                buf.push(value[end])
-            }
-            end++
-        }
-        start = end
-        end++
-    }
 
-    if (start < value.length && end > start) {
-        buf.push(value.substring(start, end))
-    }
-
-    return buf
-}
-export function nextFuzzyPart(value: string, start: number): number {
+function nextFuzzyPart(value: string, start: number): number {
     var end = start
     while (end < value.length && !isDelimeterOrUppercase(value[end])) end++
-    // console.log(JSON.stringify(value.substring(end)))
     return end
 }
 
@@ -216,21 +228,18 @@ function populateBloomFilter(values: SearchValue[]): BloomFilter {
     })
     return hashes
 }
+
 function allQueryHashParts(query: string): number[] {
     const fuzzyParts = allFuzzyParts(query, false)
     const result: number[] = []
     const H = new Hasher()
-    // let chars: string[] = []
     for (var i = 0; i < fuzzyParts.length; i++) {
         H.reset()
-        // chars = []
         const part = fuzzyParts[i]
         for (var j = 0; j < part.length; j++) {
             H.update(part[j])
-            // chars.push(part[j])
         }
         const digest = H.digest()
-        // console.log(`part=${part} digest=${digest} chars=${chars.join('')}`)
         result.push(digest)
     }
     return result
@@ -238,20 +247,15 @@ function allQueryHashParts(query: string): number[] {
 
 function updateHashParts(value: string, buf: BloomFilter): void {
     let H = new Hasher()
-    // console.log(`value='${value}'`)
-    // let chars: string[] = []
 
     for (var i = 0; i < value.length; i++) {
         const ch = value[i]
         if (isDelimeterOrUppercase(ch)) {
             H.reset()
-            // chars = []
         }
         if (isDelimeter(ch)) continue
         H.update(ch)
-        // chars.push(ch)
         const digest = H.digest()
-        // console.log(`chars=${chars.join('')} digest=${digest}`)
         buf.add(digest)
     }
 }

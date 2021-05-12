@@ -135,7 +135,7 @@ const domFunctions = {
  * - "extension host loading viewer": Extensions have loaded, but the extension host
  * doesn't know about the current viewer yet. We know that we are in this state
  * when blobInfo changes. On entering this state, clear resources from
- * previous viewer (f.g. hoverifier subscription, line decorations). If we don't remove extension features
+ * previous viewer (e.g. hoverifier subscription, line decorations). If we don't remove extension features
  * in this state, hovers can lead to errors like `DocumentNotFoundError`.
  */
 export const Blob: React.FunctionComponent<BlobProps> = props => {

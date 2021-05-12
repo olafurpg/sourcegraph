@@ -72,8 +72,4 @@
   "go.lintTool": "golangci-lint",
   "shellformat.flag": "-i 2 -ci",
   "vscode-graphql.useSchemaFileDefinitions": true,
-  "files.watcherExclude": {
-    "**/target": true
-  },
-  "jest.jestCommandLine": "yarn -s test",
 }
