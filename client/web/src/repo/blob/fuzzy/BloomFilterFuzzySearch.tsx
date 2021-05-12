@@ -21,6 +21,10 @@ function isDelimeter(ch: string): boolean {
             return false
     }
 }
+function startsFuzzyPart(value: string, i: number): boolean {
+    const ch = value[i]
+    return !isDelimeter(ch) && (isUppercase(value[i]) || isDelimeter(value[i - 1]))
+}
 
 const MAX_VALUE_LENGTH = 100
 
@@ -29,10 +33,13 @@ export function fuzzyMatchesQuery(query: string, value: string): RangePosition[]
 }
 export function fuzzyMatches(queries: string[], value: string): RangePosition[] {
     const result: RangePosition[] = []
+    // console.log(queries)
     var queryIndex = 0
     var start = 0
     while (queryIndex < queries.length && start < value.length) {
         const query = queries[queryIndex]
+        while (isDelimeter(value[start])) start++
+        // console.log(JSON.stringify(value[start]))
         if (value.startsWith(query, start)) {
             const end = start + query.length
             result.push({
@@ -52,7 +59,11 @@ export function allFuzzyParts(value: string): string[] {
     const buf: string[] = []
     var start = 0
     for (var end = 0; end < value.length; end = nextFuzzyPart(value, end)) {
+        // console.log(JSON.stringify(value.substring(start, end)))
+        // console.log(JSON.stringify(value.substring(start, end - 1)))
         if (end > start) {
+            // let actualEnd = end
+            // while (actualEnd > 0 && isDelimeter(value[actualEnd - 1])) actualEnd--
             buf.push(value.substring(start, end))
         }
         while (end < value.length && isDelimeter(value[end])) end++
@@ -65,6 +76,7 @@ export function allFuzzyParts(value: string): string[] {
 export function nextFuzzyPart(value: string, start: number): number {
     var end = start
     while (end < value.length && !isDelimeterOrUppercase(value[end])) end++
+    // console.log(JSON.stringify(value.substring(end)))
     return end
 }
 const DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT = 8
@@ -82,14 +94,17 @@ function allQueryHashParts(query: string): number[] {
     const fuzzyParts = allFuzzyParts(query)
     const result: number[] = []
     const H = new Hasher()
+    // let chars: string[] = []
     for (var i = 0; i < fuzzyParts.length; i++) {
         H.reset()
+        // chars = []
         const part = fuzzyParts[i]
         for (var j = 0; j < part.length; j++) {
             H.update(part[j])
+            // chars.push(part[j])
         }
         const digest = H.digest()
-        // console.log(`part=${part} digest=${digest} chars=${chars.join("")}`);
+        // console.log(`part=${part} digest=${digest} chars=${chars.join('')}`)
         result.push(digest)
     }
     return result
@@ -97,14 +112,20 @@ function allQueryHashParts(query: string): number[] {
 
 function updateHashParts(value: string, buf: BloomFilter): void {
     let H = new Hasher()
+    // console.log(`value='${value}'`)
+    // let chars: string[] = []
+
     for (var i = 0; i < value.length; i++) {
         const ch = value[i]
         if (isDelimeterOrUppercase(ch)) {
             H.reset()
+            // chars = []
         }
         if (isDelimeter(ch)) continue
         H.update(ch)
+        // chars.push(ch)
         const digest = H.digest()
+        // console.log(`chars=${chars.join('')} digest=${digest}`)
         buf.add(digest)
     }
 }

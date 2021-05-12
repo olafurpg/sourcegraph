@@ -1,6 +1,15 @@
 import { BloomFilterFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
 
-const all = ['to/the/moon.jpg', 'business/crazy.txt', 'fuzzy/business.txt', 'haha/business.txt', 'lol/business.txt']
+const all = [
+    '.tsconfig.json',
+    'to/the/moon.jpg',
+    'lol/business.txt',
+    'haha/business.txt',
+    'business/crazy.txt',
+    'fuzzy/business.txt',
+    '.ts/workflows/config.json',
+]
+
 const fuzzy = BloomFilterFuzzySearch.fromSearchValues(all.map(f => ({ value: f })))
 
 function checkSearch(query: string, expected: string[]) {
@@ -33,6 +42,8 @@ checkParts('camelCase', 'hahaBusiness.txt', ['haha', 'Business', 'txt'])
 checkParts('CamelCase', 'HahaBusiness.txt', ['Haha', 'Business', 'txt'])
 checkParts('kebab-case', 'haha-business.txt', ['haha', 'business', 'txt'])
 checkParts('kebab-case', 'haha-business.txt', ['haha', 'business', 'txt'])
+checkParts('dotfile', '.tsconfig.json', ['tsconfig', 'json'])
+checkFuzzyMatch('dotfile', 'ts', '.tsconfig.json', ['ts'])
 
 checkFuzzyMatch('basic', 'ha/busi', 'haha/business.txt', ['ha', 'busi'])
 
@@ -43,10 +54,9 @@ checkSearch('t/t/moon', ['to/the/moon.jpg'])
 checkSearch('t.t.moon', ['to/the/moon.jpg'])
 checkSearch('t t moon', ['to/the/moon.jpg'])
 checkSearch('jpg', ['to/the/moon.jpg'])
-checkSearch('t', all)
-
 checkSearch('t/m', ['to/the/moon.jpg'])
 checkSearch('mo', ['to/the/moon.jpg'])
+checkSearch('t', all)
 
 // TODO: start with dot '.'
 // checkSearch("github", [".github/workflows/foo.yml"]);
