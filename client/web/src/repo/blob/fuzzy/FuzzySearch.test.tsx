@@ -7,6 +7,7 @@ const all = [
     'haha/business.txt',
     'business/crazy.txt',
     'fuzzy/business.txt',
+    // 'Documentation/README.txt',
     '.ts/workflows/config.json',
 ]
 
@@ -57,6 +58,7 @@ checkSearch('jpg', ['to/the/moon.jpg'])
 checkSearch('t/m', ['to/the/moon.jpg'])
 checkSearch('mo', ['to/the/moon.jpg'])
 checkSearch('t', all)
+// checkSearch('readme', ["Documentation/README>md"])
 
 checkFuzzyMatch('consume-delimeter-negative', 'ts/json', '.tsconfig.json', [])
 checkFuzzyMatch('consume-delimeter-positive', 'ts/json', '.tsconfig/json', ['ts', '/', 'json'])
