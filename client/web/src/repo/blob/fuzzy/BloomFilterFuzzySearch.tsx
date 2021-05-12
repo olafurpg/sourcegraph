@@ -196,14 +196,24 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
     }
     public search(query: FuzzySearchParameters): FuzzySearchResult {
         if (query.value.length === 0) return this.emptyResult(query)
+        const self = this
         const result: HighlightedTextProps[] = []
         const finalQuery = this.actualQuery(query.value)
         const hashParts = allQueryHashParts(finalQuery)
-        this.updateSearchResults(finalQuery, hashParts, result)
-        return this.sorted({
-            values: result,
-            isComplete: true,
-        })
+        function complete(isComplete: boolean) {
+            return self.sorted({ values: result, isComplete: isComplete })
+        }
+        for (var i = 0; i < this.buckets.length; i++) {
+            const bucket = this.buckets[i]
+            const matches = bucket.matches(finalQuery, hashParts)
+            for (var j = 0; j < matches.value.length; j++) {
+                if (result.length >= query.maxResults) {
+                    return complete(false)
+                }
+                result.push(matches.value[j])
+            }
+        }
+        return complete(true)
     }
 
     private sorted(result: FuzzySearchResult): FuzzySearchResult {
@@ -235,12 +245,5 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
             }
         }
         return complete(true)
-    }
-
-    private updateSearchResults(finalQuery: string, hashParts: number[], result: HighlightedTextProps[]): void {
-        this.buckets.forEach(bucket => {
-            const matches = bucket.matches(finalQuery, hashParts)
-            result.push(...matches.value)
-        })
     }
 }
