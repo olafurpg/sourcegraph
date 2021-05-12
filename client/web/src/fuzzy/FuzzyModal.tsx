@@ -7,9 +7,11 @@ import { HighlightedText, HighlightedTextProps } from '../repo/blob/fuzzy/Highli
 import { useEphemeralState, useLocalStorage, State } from '../repo/blob/fuzzy/useLocalStorage'
 
 const MAX_RESULTS = 100
+
 interface Empty {
     key: 'empty'
 }
+
 interface Loading {
     key: 'loading'
 }
