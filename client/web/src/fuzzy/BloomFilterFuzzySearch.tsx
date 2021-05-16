@@ -11,6 +11,7 @@ const MAX_VALUE_LENGTH = 100
 const DEFAULT_BLOOM_FILTER_HASH_FUNCTION_COUNT = 1
 const DEFAULT_BLOOM_FILTER_SIZE = 2 << 17
 const DEFAULT_BUCKET_SIZE = 50
+const INDEX_STEP_FILE_COUNT = 25000
 
 /**
  * Returns true if the given query fuzzy matches the given value.
@@ -21,6 +22,7 @@ export function fuzzyMatchesQuery(query: string, value: string): RangePosition[]
 
 export interface SearchValue {
     text: string
+    url?: string
 }
 
 export interface Indexing {
@@ -77,7 +79,7 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
             if (indexer.isDone()) {
                 return { key: 'ready', value: indexer.complete() }
             }
-            indexer.processBuckets(25000)
+            indexer.processBuckets(INDEX_STEP_FILE_COUNT)
             return {
                 key: 'indexing',
                 indexedFileCount: indexer.indexedFileCount(),

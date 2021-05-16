@@ -1,16 +1,16 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions */
+
 import React from 'react'
+import { FuzzyModalState } from 'src/repo/RepoContainer'
 
 import { gql } from '@sourcegraph/shared/src/graphql/graphql'
 
 import { requestGraphQL } from '../backend/graphql'
 
-import { BloomFilterFuzzySearch, Indexing as FuzzyIndexing } from './BloomFilterFuzzySearch'
+import { BloomFilterFuzzySearch, Indexing as FuzzyIndexing, SearchValue } from './BloomFilterFuzzySearch'
 import { FuzzySearch, FuzzySearchResult } from './FuzzySearch'
 import { HighlightedText, HighlightedTextProps } from './HighlightedText'
 import { useEphemeralState, useLocalStorage, State } from './useLocalStorage'
@@ -20,7 +20,7 @@ const DEFAULT_MAX_RESULTS = 100
 const IS_DEBUG = window.location.href.toString().includes('debug=true')
 
 export interface FuzzyModalProps {
-    isVisible: boolean
+    modalState: FuzzyModalState
     onClose(): void
     repoName: string
     commitID: string
@@ -49,7 +49,7 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
 
     const loaded = useEphemeralState<Loaded>({ key: 'empty' })
 
-    if (!props.isVisible) {
+    if (!props.modalState) {
         return null
     }
 
@@ -335,8 +335,8 @@ function renderReady(
     }
 }
 
-function filesCacheKey(props: FuzzyModalProps): string {
-    return `/fuzzy-modal.files.${props.repoName}.${props.commitID}`
+function fuzzyModalCacheKey(props: FuzzyModalProps): string {
+    return `/fuzzy-modal.${props.modalState}.${props.repoName}.${props.commitID}`
 }
 
 function openCaches(): Promise<Cache> {
@@ -364,23 +364,22 @@ async function loadCachedIndex(props: FuzzyModalProps): Promise<Loaded | undefin
     if (!cacheAvailable) {
         return Promise.resolve(undefined)
     }
-    const cacheKey = filesCacheKey(props)
+    const cacheKey = fuzzyModalCacheKey(props)
     const cache = await openCaches()
     const cacheRequest = new Request(cacheKey)
     const fromCache = await cache.match(cacheRequest)
     if (!fromCache) {
         return undefined
     }
-    const filenames = JSON.parse(await fromCache.text())
-    return handleFilenames(props, filenames)
+    return handleSearchValues(JSON.parse(await fromCache.text()))
 }
 
-async function cacheFilenames(props: FuzzyModalProps, filenames: string[]): Promise<void> {
+async function cacheValues(props: FuzzyModalProps, filenames: SearchValue[]): Promise<void> {
     const cacheAvailable = 'caches' in self
     if (!cacheAvailable) {
         return Promise.resolve()
     }
-    const cacheKey = filesCacheKey(props)
+    const cacheKey = fuzzyModalCacheKey(props)
     const cache = await openCaches()
     await cache.put(cacheKey, new Response(JSON.stringify(filenames)))
 }
@@ -392,39 +391,10 @@ async function handleEmpty(props: FuzzyModalProps, files: State<Loaded>): Promis
     } else {
         files.set({ key: 'downloading' })
         try {
-            const next: any = await requestGraphQL(
-                gql`
-                    query Files($repository: String!, $commit: String!) {
-                        repository(name: $repository) {
-                            commit(rev: $commit) {
-                                tree(recursive: true) {
-                                    files(first: 1000000, recursive: true) {
-                                        path
-                                    }
-                                }
-                            }
-                        }
-                    }
-                `,
-                {
-                    repository: props.repoName,
-                    commit: props.commitID,
-                }
-            ).toPromise()
-            const filenames = next.data?.repository?.commit?.tree?.files?.map((file: any) => file.path) as
-                | string[]
-                | undefined
-            if (filenames) {
-                files.set(handleFilenames(props, filenames))
-                cacheFilenames(props, filenames).then(
-                    () => {},
-                    () => {}
-                )
-            } else {
-                files.set({
-                    key: 'failed',
-                    errorMessage: JSON.stringify(next.data),
-                })
+            if (props.modalState === 'files') {
+                await downloadFilenames(props, files)
+            } else if (props.modalState === 'symbols') {
+                await downloadSymbols(props, files)
             }
         } catch (error) {
             files.set({
@@ -434,8 +404,88 @@ async function handleEmpty(props: FuzzyModalProps, files: State<Loaded>): Promis
         }
     }
 }
-function handleFilenames(props: FuzzyModalProps, filenames: string[]): Loaded {
-    const loader = BloomFilterFuzzySearch.fromSearchValuesAsync(filenames.map(file => ({ text: file })))
+
+async function downloadSymbols(props: FuzzyModalProps, files: State<Loaded>): Promise<void> {
+    const next: any = await requestGraphQL(
+        gql`
+            query Symbols($repository: String!, $commit: String!, $includePatterns: String!) {
+                repository(name: $repository) {
+                    commit(rev: $commit) {
+                        symbols(first: 1000000, includePatterns: $includePatterns) {
+                            nodes {
+                                name
+                                location {
+                                    url
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `,
+        {
+            repository: props.repoName,
+            commit: props.commitID,
+            includePatterns: '.*',
+        }
+    ).toPromise()
+    const nodes: any[] | undefined = next.data?.repository?.commit?.symbols?.nodes
+    if (nodes) {
+        const symbols: SearchValue[] = nodes.map((symbol: any) => ({
+            text: symbol.name,
+            url: symbol.location.url,
+        }))
+        files.set(handleSearchValues(symbols))
+        cacheValues(props, symbols).then(
+            () => {},
+            () => {}
+        )
+    } else {
+        files.set({
+            key: 'failed',
+            errorMessage: JSON.stringify(next.data),
+        })
+    }
+}
+
+async function downloadFilenames(props: FuzzyModalProps, files: State<Loaded>): Promise<void> {
+    const next: any = await requestGraphQL(
+        gql`
+            query Files($repository: String!, $commit: String!) {
+                repository(name: $repository) {
+                    commit(rev: $commit) {
+                        tree(recursive: true) {
+                            files(first: 1000000, recursive: true) {
+                                path
+                            }
+                        }
+                    }
+                }
+            }
+        `,
+        {
+            repository: props.repoName,
+            commit: props.commitID,
+        }
+    ).toPromise()
+    const filenames: any[] | undefined = next.data?.repository?.commit?.tree?.files
+    if (filenames) {
+        const searchValues: SearchValue[] = filenames.map((file: any) => ({ text: file.path }))
+        files.set(handleSearchValues(searchValues))
+        cacheValues(props, searchValues).then(
+            () => {},
+            () => {}
+        )
+    } else {
+        files.set({
+            key: 'failed',
+            errorMessage: JSON.stringify(next.data),
+        })
+    }
+}
+
+function handleSearchValues(values: SearchValue[]): Loaded {
+    const loader = BloomFilterFuzzySearch.fromSearchValuesAsync(values)
     if (loader.key === 'ready') {
         return {
             key: 'ready',

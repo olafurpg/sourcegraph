@@ -27,6 +27,12 @@ export const KEYBOARD_SHORTCUT_FOCUS_SEARCHBAR: KeyboardShortcut = {
     keybindings: [{ ordered: ['/'] }],
 }
 
+export const KEYBOARD_SHORTCUT_FUZZY_SYMBOLS: KeyboardShortcut = {
+    id: 'fuzzySymbols',
+    title: 'Fuzzy search symbols',
+    keybindings: [{ ordered: ['s'] }],
+}
+
 export const KEYBOARD_SHORTCUT_FUZZY_FILES: KeyboardShortcut = {
     id: 'fuzzyFiles',
     title: 'Fuzzy search files',

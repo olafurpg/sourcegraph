@@ -41,7 +41,8 @@ import { ActionItemsBarProps, useWebActionItems } from '../extensions/components
 import { FuzzyModal } from '../fuzzy/FuzzyModal'
 import { ExternalLinkFields, RepositoryFields } from '../graphql-operations'
 import {
-    KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES,
+    KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES as KEYBOARD_SHORTCUT_CLOSE_FUZZY_MODAL,
+    KEYBOARD_SHORTCUT_FUZZY_SYMBOLS,
     KEYBOARD_SHORTCUT_FUZZY_FILES,
 } from '../keyboardShortcuts/keyboardShortcuts'
 import { IS_CHROME } from '../marketing/util'
@@ -109,6 +110,14 @@ export interface RepoContainerRoute extends RouteDescriptor<RepoContainerContext
 const RepoPageNotFound: React.FunctionComponent = () => (
     <HeroPage icon={MapSearchIcon} title="404: Not Found" subtitle="The repository page was not found." />
 )
+
+export type FuzzyModalState = 'files' | 'symbols' | 'closed'
+
+function selectFuzzyModalInput(): void {
+    const input = document.querySelector('#fuzzy-modal-input') as any
+    input?.focus()
+    input?.select()
+}
 
 interface RepoContainerProps
     extends RouteComponentProps<{ repoRevAndRest: string }>,
@@ -322,7 +331,7 @@ export const RepoContainer: React.FunctionComponent<RepoContainerProps> = props 
     // Browser extension discoverability features (alert, popover for `GoToCodeHostAction)
     const [hasDismissedExtensionAlert, setHasDismissedExtensionAlert] = useLocalStorage(HAS_DISMISSED_ALERT_KEY, false)
     const [hasDismissedPopover, setHasDismissedPopover] = useState(false)
-    const [isFuzzyModalVisible, setIsFuzzyModalVisible] = useState(false)
+    const [fuzzyModalState, setFuzzyModalState] = useState<FuzzyModalState>('closed')
     const [hoverCount, setHoverCount] = useLocalStorage(HOVER_COUNT_KEY, 0)
     const canShowPopover =
         !hasDismissedPopover &&
@@ -396,20 +405,25 @@ export const RepoContainer: React.FunctionComponent<RepoContainerProps> = props 
             <Shortcut
                 {...KEYBOARD_SHORTCUT_FUZZY_FILES.keybindings[0]}
                 onMatch={() => {
-                    setIsFuzzyModalVisible(true)
-                    const input = document.querySelector('#fuzzy-modal-input') as any
-                    input?.focus()
-                    input?.select()
+                    setFuzzyModalState('files')
+                    selectFuzzyModalInput()
                 }}
             />
             <Shortcut
-                {...KEYBOARD_SHORTCUT_CLOSE_FUZZY_FILES.keybindings[0]}
-                onMatch={() => setIsFuzzyModalVisible(false)}
+                {...KEYBOARD_SHORTCUT_FUZZY_SYMBOLS.keybindings[0]}
+                onMatch={() => {
+                    setFuzzyModalState('symbols')
+                    selectFuzzyModalInput()
+                }}
+            />
+            <Shortcut
+                {...KEYBOARD_SHORTCUT_CLOSE_FUZZY_MODAL.keybindings[0]}
+                onMatch={() => setFuzzyModalState('closed')}
             />
             {resolvedRevisionOrError && !isErrorLike(resolvedRevisionOrError) && (
                 <FuzzyModal
-                    isVisible={isFuzzyModalVisible}
-                    onClose={() => setIsFuzzyModalVisible(false)}
+                    modalState={fuzzyModalState}
+                    onClose={() => setFuzzyModalState('closed')}
                     repoName={repoName}
                     commitID={resolvedRevisionOrError.commitID}
                 />
