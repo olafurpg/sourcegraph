@@ -1,4 +1,5 @@
-import { BloomFilterFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
+import { CaseSensitiveFuzzySearch, allFuzzyParts, fuzzyMatchesQuery } from './BloomFilterFuzzySearch'
+import { FuzzySearchParameters } from './FuzzySearch'
 
 const all = [
     't1/README.md',
@@ -15,18 +16,18 @@ const all = [
     'test/WorkspaceSymbolProvider.scala',
 ]
 
-const fuzzy = BloomFilterFuzzySearch.fromSearchValues(all.map(text => ({ text })))
+const fuzzy = CaseSensitiveFuzzySearch.fromSearchValues(all.map(text => ({ text })))
 
 function checkSearch(query: string, expected: string[]) {
     test(`search-${query}`, () => {
-        const queryProps = { value: query, maxResults: 1000 }
-        const actual = fuzzy.search(queryProps).values.map(highlightedText => highlightedText.text)
+        const queryProps: FuzzySearchParameters = { query, maxResults: 1000 }
+        const actual = fuzzy.search(queryProps).results.map(highlightedText => highlightedText.text)
         expect(actual).toStrictEqual(expected)
         for (const result of expected) {
-            const individualFuzzy = BloomFilterFuzzySearch.fromSearchValues([{ text: result }])
+            const individualFuzzy = CaseSensitiveFuzzySearch.fromSearchValues([{ text: result }])
             const individualActual = individualFuzzy
                 .search(queryProps)
-                .values.map(highlightedText => highlightedText.text)
+                .results.map(highlightedText => highlightedText.text)
             expect(individualActual).toStrictEqual([result])
         }
     })

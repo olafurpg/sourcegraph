@@ -1,13 +1,18 @@
 import { HighlightedTextProps } from './HighlightedText'
 
+export interface SearchValue {
+    text: string
+}
+
 export interface FuzzySearchParameters {
-    value: string
+    query: string
     maxResults: number
+    isDebug: boolean
     createUrl?: (value: string) => string
     onClick?: () => void
 }
 export interface FuzzySearchResult {
-    values: HighlightedTextProps[]
+    results: HighlightedTextProps[]
     isComplete: boolean
     elapsedMilliseconds?: number
     falsePositiveRatio?: number

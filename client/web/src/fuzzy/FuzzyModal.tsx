@@ -8,14 +8,19 @@ import { useLocalStorage } from '@sourcegraph/shared/src/util/useLocalStorage'
 
 import { requestGraphQL } from '../backend/graphql'
 
-import { BloomFilterFuzzySearch, Indexing as FuzzyIndexing } from './BloomFilterFuzzySearch'
+import { CaseInsensitiveFuzzySearch } from './CaseInsensitiveFuzzySearch'
+import { CaseSensitiveFuzzySearch, Indexing as FuzzyIndexing } from './CaseSensitiveFuzzySearch'
 import styles from './FuzzyModal.module.scss'
-import { FuzzySearch, FuzzySearchResult } from './FuzzySearch'
+import { FuzzySearch, FuzzySearchResult, SearchValue } from './FuzzySearch'
 import { HighlightedText } from './HighlightedText'
 
 const DEFAULT_MAX_RESULTS = 100
+const LARGE_REPOSITORY_THRESHOLD = 25000
 
-const IS_DEBUG = window.location.href.toString().includes('fuzzyFinder=debug')
+const IS_FUZZY_FINDER_DEBUG = window.location.href.toString().includes('fuzzyFinder=debug')
+const IS_FUZZY_FINDER_ENABLED = window.location.href.toString().includes('fuzzyFinder=enabled')
+const IS_FUZZY_FINDER_BLOOM_FILTER = window.location.href.toString().includes('fuzzyAlgorithm=bloom-filter')
+const IS_FUZZY_FINDER_FZY = window.location.href.toString().includes('fuzzyAlgorithm=fzy')
 
 export interface FuzzyModalProps extends SettingsCascadeProps {
     isVisible: boolean
@@ -49,7 +54,8 @@ export const FuzzyModal: React.FunctionComponent<FuzzyModalProps> = props => {
 
     console.log(props.settingsCascade.final)
     const isFuzzyFinderEnabled =
-        IS_DEBUG ||
+        IS_FUZZY_FINDER_DEBUG ||
+        IS_FUZZY_FINDER_ENABLED ||
         (!isErrorLike(props.settingsCascade.final) &&
             props.settingsCascade.final?.experimentalFeatures?.fuzzyFinder === 'enabled')
 
@@ -134,7 +140,7 @@ function plural(what: string, count: number, isComplete: boolean): string {
 }
 
 function fuzzyFooter(loaded: Loaded, files: RenderedFiles): JSX.Element {
-    return IS_DEBUG ? (
+    return IS_FUZZY_FINDER_DEBUG ? (
         <>
             <span>{files.falsePositiveRatio && Math.round(files.falsePositiveRatio * 100)}fp</span>
             <span>{files.elapsedMilliseconds && Math.round(files.elapsedMilliseconds).toLocaleString()}ms</span>
@@ -287,8 +293,9 @@ function renderReady(
     if (!fuzzyResult) {
         const start = window.performance.now()
         fuzzyResult = fuzzy.search({
-            value: query,
+            query,
             maxResults,
+            isDebug: IS_FUZZY_FINDER_DEBUG,
             createUrl: filename => `/${props.repoName}@${props.commitID}/-/blob/${filename}`,
             onClick: () => props.onClose(),
         })
@@ -296,7 +303,7 @@ function renderReady(
         lastFuzzySearchResult.clear() // Only cache the last query.
         lastFuzzySearchResult.set(cacheKey, fuzzyResult)
     }
-    const matchingFiles = fuzzyResult.values
+    const matchingFiles = fuzzyResult.results
     if (matchingFiles.length === 0) {
         return {
             element: <p>No files matching '{query}'</p>,
@@ -445,7 +452,15 @@ async function handleEmpty(props: FuzzyModalProps, setFiles: (files: Loaded) => 
     }
 }
 function handleFilenames(filenames: string[]): Loaded {
-    const loader = BloomFilterFuzzySearch.fromSearchValuesAsync(filenames.map(file => ({ text: file })))
+    const searchValues: SearchValue[] = filenames.map(file => ({ text: file }))
+    if (IS_FUZZY_FINDER_FZY || (filenames.length < LARGE_REPOSITORY_THRESHOLD && !IS_FUZZY_FINDER_BLOOM_FILTER)) {
+        return {
+            key: 'ready',
+            fuzzy: new CaseInsensitiveFuzzySearch(searchValues),
+            totalFileCount: filenames.length,
+        }
+    }
+    const loader = CaseSensitiveFuzzySearch.fromSearchValuesAsync(searchValues)
     if (loader.key === 'ready') {
         return {
             key: 'ready',

@@ -1,6 +1,6 @@
 import { BloomFilter } from 'bloomfilter'
 
-import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult } from './FuzzySearch'
+import { FuzzySearch, FuzzySearchParameters, FuzzySearchResult, SearchValue } from './FuzzySearch'
 import { Hasher } from './Hasher'
 import { HighlightedTextProps, offsetSum, RangePosition } from './HighlightedText'
 
@@ -20,20 +20,16 @@ export function fuzzyMatchesQuery(query: string, value: string): RangePosition[]
     return fuzzyMatches(allFuzzyParts(query, true), value)
 }
 
-export interface SearchValue {
-    text: string
-}
-
 export interface Indexing {
     key: 'indexing'
     indexedFileCount: number
     totalFileCount: number
-    partialValue: BloomFilterFuzzySearch
+    partialValue: CaseSensitiveFuzzySearch
     continue: () => Promise<FuzzySearchLoader>
 }
 export interface Ready {
     key: 'ready'
-    value: BloomFilterFuzzySearch
+    value: CaseSensitiveFuzzySearch
 }
 export type FuzzySearchLoader = Indexing | Ready
 
@@ -59,7 +55,7 @@ export type FuzzySearchLoader = Indexing | Ready
  * possible prefixes of "Symbol" and "Provider". Fortunately, bloom filters can be
  * serialized so that the indexing step only runs once per repoName/commitID pair.
  */
-export class BloomFilterFuzzySearch extends FuzzySearch {
+export class CaseSensitiveFuzzySearch extends FuzzySearch {
     public totalFileCount = 0
     constructor(public readonly buckets: Bucket[]) {
         super()
@@ -93,7 +89,7 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
     public static fromSearchValues(
         files: SearchValue[],
         bucketSize: number = DEFAULT_BUCKET_SIZE
-    ): BloomFilterFuzzySearch {
+    ): CaseSensitiveFuzzySearch {
         const indexer = new Indexer(files, bucketSize)
         while (!indexer.isDone()) {
             indexer.processBuckets(bucketSize)
@@ -101,23 +97,23 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
         return indexer.complete()
     }
 
-    public search(query: FuzzySearchParameters): FuzzySearchResult {
-        if (query.value.length === 0) {
-            return this.emptyResult(query)
+    public search(parameters: FuzzySearchParameters): FuzzySearchResult {
+        if (parameters.query.length === 0) {
+            return this.emptyResult(parameters)
         }
         let falsePositives = 0
         const result: HighlightedTextProps[] = []
-        const hashParts = allQueryHashParts(query.value)
-        const queryParts = allFuzzyParts(query.value, true)
+        const hashParts = allQueryHashParts(parameters.query)
+        const queryParts = allFuzzyParts(parameters.query, true)
         const complete = (isComplete: boolean): FuzzySearchResult =>
-            this.sorted({ values: result, isComplete, falsePositiveRatio: falsePositives / this.buckets.length })
+            this.sorted({ results: result, isComplete, falsePositiveRatio: falsePositives / this.buckets.length })
         for (const bucket of this.buckets) {
-            const matches = bucket.matches(query, queryParts, hashParts)
+            const matches = bucket.matches(parameters, queryParts, hashParts)
             if (!matches.skipped && matches.value.length === 0) {
                 falsePositives++
             }
             for (const value of matches.value) {
-                if (result.length >= query.maxResults) {
+                if (result.length >= parameters.maxResults) {
                     return complete(false)
                 }
                 result.push(value)
@@ -127,7 +123,7 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
     }
 
     private sorted(result: FuzzySearchResult): FuzzySearchResult {
-        result.values.sort((a, b) => {
+        result.results.sort((a, b) => {
             const byLength = a.text.length - b.text.length
             if (byLength !== 0) {
                 return byLength
@@ -145,7 +141,7 @@ export class BloomFilterFuzzySearch extends FuzzySearch {
 
     private emptyResult(query: FuzzySearchParameters): FuzzySearchResult {
         const result: HighlightedTextProps[] = []
-        const complete = (isComplete: boolean): FuzzySearchResult => this.sorted({ values: result, isComplete })
+        const complete = (isComplete: boolean): FuzzySearchResult => this.sorted({ results: result, isComplete })
 
         for (const bucket of this.buckets) {
             if (result.length > query.maxResults) {
@@ -444,8 +440,8 @@ class Indexer {
         this.files.sort((a, b) => a.text.length - b.text.length)
     }
 
-    public complete(): BloomFilterFuzzySearch {
-        return new BloomFilterFuzzySearch(this.buckets)
+    public complete(): CaseSensitiveFuzzySearch {
+        return new CaseSensitiveFuzzySearch(this.buckets)
     }
 
     public isDone(): boolean {
