@@ -77,6 +77,7 @@ func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ strin
 	if err != nil {
 		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
 	}
+	log15.Info("numLocations", "a", locations)
 	traceLog(log.Int("numLocations", len(locations)))
 
 	return "", lsifstore.Range{}, false, nil
