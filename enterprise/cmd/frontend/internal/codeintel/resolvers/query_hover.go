@@ -16,7 +16,6 @@ const slowHoverRequestThreshold = time.Second
 
 // Hover returns the hover text and range for the symbol at the given position.
 func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ string, _ lsifstore.Range, _ bool, err error) {
-	log15.Info("HELLO FROM HOVER")
 	ctx, traceLog, endObservation := observeResolver(ctx, &err, "Hover", r.operations.hover, slowHoverRequestThreshold, observation.Args{
 		LogFields: []log.Field{
 			log.Int("repositoryID", r.repositoryID),
@@ -67,6 +66,7 @@ func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ strin
 	if err != nil {
 		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
 	}
+	log15.Info("monikers", "a", orderedMonikers)
 
 	uploads, err := r.definitionUploads(ctx, orderedMonikers)
 	if err != nil {
