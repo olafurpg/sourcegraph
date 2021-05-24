@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/inconshreveable/log15"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/pkg/errors"
 
@@ -15,6 +16,7 @@ const slowHoverRequestThreshold = time.Second
 
 // Hover returns the hover text and range for the symbol at the given position.
 func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ string, _ lsifstore.Range, _ bool, err error) {
+	log15.Info("HELLO FROM HOVER")
 	ctx, traceLog, endObservation := observeResolver(ctx, &err, "Hover", r.operations.hover, slowHoverRequestThreshold, observation.Args{
 		LogFields: []log.Field{
 			log.Int("repositoryID", r.repositoryID),
@@ -28,22 +30,19 @@ func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ strin
 	})
 	defer endObservation()
 
-	for i := range r.uploads {
-		traceLog(log.Int("uploadID", r.uploads[i].ID))
+	adjustedUploads, err := r.adjustUploads(ctx, line, character)
+	if err != nil {
+		return "", lsifstore.Range{}, false, err
+	}
 
-		// Adjust the path and position for each visible upload based on its git difference to the target commit
-		adjustedUpload, ok, err := r.adjustUpload(ctx, line, character, r.uploads[i])
-		if err != nil {
-			return "", lsifstore.Range{}, false, err
-		}
-		if !ok {
-			continue
-		}
+	for i := range adjustedUploads {
+		adjustedUpload := adjustedUploads[i]
+		traceLog(log.Int("uploadID", adjustedUpload.Upload.ID))
 
 		// Fetch hover text from the index
 		text, rn, exists, err := r.lsifStore.Hover(
 			ctx,
-			r.uploads[i].ID,
+			adjustedUpload.Upload.ID,
 			adjustedUpload.AdjustedPathInBundle,
 			adjustedUpload.AdjustedPosition.Line,
 			adjustedUpload.AdjustedPosition.Character,
@@ -63,6 +62,22 @@ func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ strin
 
 		return text, adjustedRange, true, nil
 	}
+
+	orderedMonikers, err := r.orderedMonikers(ctx, adjustedUploads, "import")
+	if err != nil {
+		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
+	}
+
+	uploads, err := r.definitionUploads(ctx, orderedMonikers)
+	if err != nil {
+		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
+	}
+
+	locations, _, err := r.monikerLocations(ctx, uploads, orderedMonikers, "definitions", DefinitionsLimit, 0)
+	if err != nil {
+		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
+	}
+	traceLog(log.Int("numLocations", len(locations)))
 
 	return "", lsifstore.Range{}, false, nil
 }
