@@ -137,6 +137,7 @@ func TestHoverRemote(t *testing.T) {
 	if text != "doctext" {
 		t.Errorf("unexpected text. want=%q have=%q", "doctext", text)
 	}
+
 	if diff := cmp.Diff(expectedRange, rn); diff != "" {
 		t.Errorf("unexpected range (-want +got):\n%s", diff)
 	}
