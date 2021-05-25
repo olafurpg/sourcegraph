@@ -64,6 +64,13 @@ func TestHoverRemote(t *testing.T) {
 	mockGitserverClient := NewMockGitserverClient()
 	mockPositionAdjuster := noopPositionAdjuster()
 
+	expectedRange := lsifstore.Range{
+		Start: lsifstore.Position{Line: 10, Character: 10},
+		End:   lsifstore.Position{Line: 15, Character: 25},
+	}
+	mockLSIFStore.HoverFunc.PushReturn("", lsifstore.Range{}, false, nil)
+	mockLSIFStore.HoverFunc.PushReturn("doctext", expectedRange, true, nil)
+
 	remoteUploads := []dbstore.Dump{
 		{ID: 150, Commit: "deadbeef1", Root: "sub1/"},
 		{ID: 151, Commit: "deadbeef2", Root: "sub2/"},
@@ -130,8 +137,7 @@ func TestHoverRemote(t *testing.T) {
 	if text != "doctext" {
 		t.Errorf("unexpected text. want=%q have=%q", "doctext", text)
 	}
-	t.Log(rn)
-	// if diff := cmp.Diff(expectedRange, rn); diff != "" {
-	// 	t.Errorf("unexpected range (-want +got):\n%s", diff)
-	// }
+	if diff := cmp.Diff(expectedRange, rn); diff != "" {
+		t.Errorf("unexpected range (-want +got):\n%s", diff)
+	}
 }

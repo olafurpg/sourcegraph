@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/inconshreveable/log15"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/pkg/errors"
 
@@ -62,23 +61,31 @@ func (r *queryResolver) Hover(ctx context.Context, line, character int) (_ strin
 		return text, adjustedRange, true, nil
 	}
 
-	orderedMonikers, err := r.orderedMonikers(ctx, adjustedUploads, "import")
-	if err != nil {
-		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
-	}
-	log15.Info("monikers", "a", orderedMonikers)
+	locations, err := r.Definitions(ctx, line, character)
 
-	uploads, err := r.definitionUploads(ctx, orderedMonikers)
-	if err != nil {
-		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
-	}
+	for i := range locations {
+		text, rn, exists, err := r.lsifStore.Hover(
+			ctx,
+			locations[i].Dump.ID,
+			locations[i].Path,
+			locations[i].AdjustedRange.Start.Line,
+			locations[i].AdjustedRange.Start.Character,
+		)
+		if err != nil {
+			return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
+		}
+		if !exists || text == "" {
+			continue
+		}
 
-	locations, _, err := r.monikerLocations(ctx, uploads, orderedMonikers, "definitions", DefinitionsLimit, 0)
-	if err != nil {
-		return "", lsifstore.Range{}, false, errors.Wrap(err, "lsifStore.Hover")
+		// Adjust the highlighted range back to the appropriate range in the target commit
+		_, adjustedRange, err := r.adjustRange(ctx, r.uploads[i].RepositoryID, r.uploads[i].Commit, r.path, rn)
+		if err != nil {
+			return "", lsifstore.Range{}, false, err
+		}
+
+		return text, adjustedRange, true, nil
 	}
-	log15.Info("numLocations", "a", locations)
-	traceLog(log.Int("numLocations", len(locations)))
 
 	return "", lsifstore.Range{}, false, nil
 }
